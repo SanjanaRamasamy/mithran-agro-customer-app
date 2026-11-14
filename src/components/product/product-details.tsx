@@ -15,7 +15,6 @@ import {
   Zap,
 } from "lucide-react";
 import type { Product } from "@/types";
-import { PRODUCT_BY_ID } from "@/data/products";
 import { SELLER_BY_ID } from "@/data/sellers";
 import { CATEGORY_BY_ID, categoryKind } from "@/data/categories";
 import { useActivity } from "@/contexts/ActivityContext";
@@ -33,18 +32,25 @@ import { reviewsForProduct, ratingBreakdown } from "@/data/reviews";
 import { formatPrice, formatDate, calcDiscountPercent } from "@/utils/format";
 import { cn } from "@/lib/utils";
 import { FAQS } from "@/data/banners";
+import { useCatalog } from "@/contexts/CatalogContext";
 
 /* ------------------------------------------------------------------ */
 /*  Buy box                                                            */
 /* ------------------------------------------------------------------ */
 
 function BuyBox({ product }: { product: Product }) {
+  const minimumQuantity = product.prestaShop?.minimumQuantity ?? 1;
   const [variantId, setVariantId] = useState(product.variants.find((v) => v.inStock)?.id ?? product.variants[0].id);
-  const [qty, setQty] = useState(1);
+  const [qty, setQty] = useState(minimumQuantity);
   const { addToCart, toggleWishlist } = useShoppingActions();
   const wishlist = useWishlist();
   const variant = product.variants.find((v) => v.id === variantId) ?? product.variants[0];
   const wished = wishlist.has(product.id);
+  const canPurchase =
+    variant.inStock &&
+    product.prestaShop?.active !== false &&
+    product.prestaShop?.availableForOrder !== false;
+  const maxQuantity = product.prestaShop?.quantity ?? variant.stockCount ?? 10;
   const discount = calcDiscountPercent(variant.mrp, variant.price);
   const { trackView } = useActivity();
 
@@ -64,14 +70,10 @@ function BuyBox({ product }: { product: Product }) {
         <h1 className="mt-2 text-2xl font-extrabold tracking-tight text-charcoal sm:text-3xl">
           {product.name}
         </h1>
-        <p className="mt-1 text-sm text-graymute">{product.tagline}</p>
-        <div className="mt-2 flex flex-wrap items-center gap-3">
-          <Rating value={product.rating} count={product.reviewCount} size="md" />
-          <span className="text-xs text-graymute">·</span>
-          <span className="text-xs font-semibold text-forest-700">
-            {(product.unitsSold ?? 0).toLocaleString("en-IN")} baskets sold
-          </span>
-        </div>
+        {product.tagline && <p className="mt-1 text-sm text-graymute">{product.tagline}</p>}
+        {product.reviewCount > 0 && (
+          <div className="mt-2"><Rating value={product.rating} count={product.reviewCount} size="md" /></div>
+        )}
       </div>
 
       {/* Price block */}
@@ -82,7 +84,7 @@ function BuyBox({ product }: { product: Product }) {
             You save {formatPrice(variant.mrp - variant.price)} ({discount}%) vs. supermarket M.R.P.
           </p>
         )}
-        <p className="mt-1 text-xs text-graymute">Inclusive of all taxes · {variant.name}</p>
+        <p className="mt-1 text-xs text-graymute">{variant.name}</p>
 
         {/* Variants */}
         <div className="mt-4" role="radiogroup" aria-label={categoryKind(product) === "fashion" ? "Select size" : "Pack size"}>
@@ -116,26 +118,32 @@ function BuyBox({ product }: { product: Product }) {
 
         {/* Stock + qty + CTA */}
         <div className="mt-5 flex flex-wrap items-center gap-3">
-          <QuantityStepper value={qty} onChange={setQty} min={1} max={10} ariaLabel="Quantity to add" />
-          {variant.inStock ? (
-            (variant.stockCount ?? 99) < 20 && (
-              <span className="text-xs font-bold text-orange-600">
-                Only {variant.stockCount} left — limited harvest!
-              </span>
-            )
+          {canPurchase ? (
+            <QuantityStepper
+              value={qty}
+              onChange={setQty}
+              min={minimumQuantity}
+              max={Math.max(minimumQuantity, maxQuantity)}
+              ariaLabel="Quantity to add"
+            />
           ) : (
-            <span className="text-xs font-bold text-red-600">Out of stock</span>
+            <span className="text-xs font-bold text-red-600">
+              {product.prestaShop?.availableForOrder === false ? "Unavailable for order" : "Out of stock"}
+            </span>
+          )}
+          {canPurchase && product.prestaShop && (
+            <span className="text-xs text-graymute">{maxQuantity} available</span>
           )}
         </div>
         <div className="mt-3 flex gap-2.5">
           <motion.button
             whileTap={{ scale: 0.97 }}
             onClick={() => addToCart(product.id, variant.id, qty)}
-            disabled={!variant.inStock}
+            disabled={!canPurchase}
             className="inline-flex h-12 flex-1 items-center justify-center gap-2 rounded-2xl bg-forest-900 text-sm font-bold text-white shadow-soft transition hover:bg-forest-800 disabled:cursor-not-allowed disabled:bg-gray-300"
           >
             <ShoppingBasket className="size-[18px]" aria-hidden />
-            {variant.inStock ? "Add to basket" : "Notify me (mock)"}
+            {canPurchase ? "Add to basket" : "Out of stock"}
           </motion.button>
           <motion.button
             whileTap={{ scale: 0.9 }}
@@ -152,7 +160,7 @@ function BuyBox({ product }: { product: Product }) {
         </div>
 
         {/* delivery promises */}
-        <div className="mt-5 grid grid-cols-2 gap-2.5 text-xs">
+        {!product.prestaShop && <div className="mt-5 grid grid-cols-2 gap-2.5 text-xs">
           {product.deliveryEligible && (
             <span className="flex items-center gap-2 rounded-xl bg-lime-soft px-3 py-2.5 font-semibold text-lime-deep">
               <Zap className="size-4 shrink-0" aria-hidden />
@@ -173,7 +181,7 @@ function BuyBox({ product }: { product: Product }) {
               Organic certified
             </span>
           )}
-        </div>
+        </div>}
       </div>
     </div>
   );
@@ -188,11 +196,12 @@ function InfoPanels({ product }: { product: Product }) {
   const category = CATEGORY_BY_ID[product.categoryId];
   const kind = categoryKind(product);
 
-  const rows: { label: string; value: string }[] = [
-    { label: kind === "produce" ? "Harvest date" : "Listed since", value: formatDate(product.harvestDate, "long") },
-    { label: kind === "fashion" ? "Ships from" : "Origin", value: product.origin },
-    { label: "Care & storage", value: product.storage },
-  ];
+  const rows: { label: string; value: string }[] = [];
+  if (product.harvestDate) {
+    rows.push({ label: kind === "produce" ? "Harvest date" : "Listed since", value: formatDate(product.harvestDate, "long") });
+  }
+  if (product.origin) rows.push({ label: kind === "fashion" ? "Ships from" : "Origin", value: product.origin });
+  if (product.storage) rows.push({ label: "Care & storage", value: product.storage });
 
   /* kind-specific attribute rows */
   if (kind === "fashion") {
@@ -211,7 +220,7 @@ function InfoPanels({ product }: { product: Product }) {
   } else if (kind === "seed") {
     if (product.germinationRate) rows.push({ label: "Germination rate", value: product.germinationRate });
     if (product.sowingSeason) rows.push({ label: "Sowing season", value: product.sowingSeason });
-  } else {
+  } else if (product.storageLifeDays > 0) {
     rows.push({ label: "Peak freshness", value: `${product.storageLifeDays} days from harvest` });
   }
 
@@ -228,10 +237,13 @@ function InfoPanels({ product }: { product: Product }) {
     : kind === "plant" || kind === "seed" ? "Meet your nursery"
     : kind === "garden" || kind === "farm" ? "About the seller"
     : "Meet your grower";
+  const hasProductDetails = Boolean(
+    product.description || rows.length || product.organicDetails || product.nutrition
+  );
 
   return (
     <div className="grid gap-5 lg:grid-cols-2">
-      <section aria-label="Product details" className="rounded-2xl border border-forest-50 bg-white p-5 shadow-soft">
+      {hasProductDetails && <section aria-label="Product details" className="rounded-2xl border border-forest-50 bg-white p-5 shadow-soft">
         <h2 className="text-base font-bold text-charcoal">{aboutTitle}</h2>
         <p className="mt-2 text-sm leading-relaxed text-graymute">{product.description}</p>
 
@@ -266,10 +278,10 @@ function InfoPanels({ product }: { product: Product }) {
             </div>
           </div>
         )}
-      </section>
+      </section>}
 
-      <section aria-label="Seller information" className="rounded-2xl border border-forest-50 bg-white p-5 shadow-soft">
-        <h2 className="text-base font-bold text-charcoal">{sellerTitle}</h2>
+      <section aria-label={seller ? "Seller information" : "Category information"} className="rounded-2xl border border-forest-50 bg-white p-5 shadow-soft">
+        <h2 className="text-base font-bold text-charcoal">{seller ? sellerTitle : "Category"}</h2>
         {seller && (
           <>
             <div className="mt-3 flex items-center gap-3.5">
@@ -313,8 +325,8 @@ function InfoPanels({ product }: { product: Product }) {
         )}
         <p className="mt-4 text-[11px] text-graymute">
           Category:{" "}
-          <Link href={`/category/${category?.slug ?? ""}`} className="font-semibold text-forest-700 hover:underline">
-            {category?.name}
+          <Link href={`/category/${category?.slug ?? product.categoryId}`} className="font-semibold text-forest-700 hover:underline">
+            {product.prestaShop?.categoryName || category?.name || "Browse category"}
           </Link>
         </p>
       </section>
@@ -434,16 +446,11 @@ function FaqSection() {
 /* ------------------------------------------------------------------ */
 
 function RelatedProducts({ product }: { product: Product }) {
-  const related = PRODUCT_BY_ID[product.id]
-    ? [
-        ...new Map(
-          [
-            ...Object.values(PRODUCT_BY_ID).filter((p) => p.categoryId === product.categoryId && p.id !== product.id),
-            ...Object.values(PRODUCT_BY_ID).filter((p) => p.sellerId === product.sellerId && p.id !== product.id),
-          ].map((p) => [p.id, p])
-        ).values(),
-      ].slice(0, 10)
-    : [];
+  const { products } = useCatalog();
+  const related = products.filter((candidate) =>
+    candidate.id !== product.id &&
+    candidate.prestaShop?.categoryIds.some((id) => product.prestaShop?.categoryIds.includes(id))
+  ).slice(0, 10);
 
   if (!related.length) return null;
 
@@ -487,8 +494,8 @@ export default function ProductDetailsContent({ product }: { product: Product })
       </div>
 
       <InfoPanels product={product} />
-      <ReviewsSection product={product} />
-      <FaqSection />
+      {product.reviewCount > 0 && <ReviewsSection product={product} />}
+      {!product.prestaShop && <FaqSection />}
       <RelatedProducts product={product} />
 
       {/* sticky mobile buy bar */}

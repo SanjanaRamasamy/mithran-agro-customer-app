@@ -1,9 +1,8 @@
 "use client";
 
-import { RotateCcw, Star } from "lucide-react";
+import { RotateCcw } from "lucide-react";
 import type { FilterState } from "@/types";
-import { CATEGORY_GROUPS, CATEGORY_BY_ID, expandCategoryIds, effectiveItemCount } from "@/data/categories";
-import { SELLERS } from "@/data/sellers";
+import { useCatalog } from "@/contexts/CatalogContext";
 import { PRICE_BOUNDS } from "@/constants";
 import { DEFAULT_FILTERS } from "@/hooks/useProductQuery";
 import { cn } from "@/lib/utils";
@@ -56,8 +55,8 @@ function CheckRow({
 }
 
 /**
- * Shared filter controls — Category, Price, Availability, Rating and
- * Seller only, matching the Mithren Agro catalogue.
+ * Shared filters use live PrestaShop categories; unsupported seller and rating
+ * facets are omitted until those records are available.
  */
 export function FiltersBody({
   filters,
@@ -68,6 +67,8 @@ export function FiltersBody({
   onChange: (f: FilterState) => void;
   resultCount: number;
 }) {
+  const { categories, products } = useCatalog();
+
   const toggleArrayValue = (key: "categories" | "sellers", value: string) => {
     const list = filters[key];
     onChange({
@@ -76,7 +77,27 @@ export function FiltersBody({
     });
   };
 
-  const expandedSelected = expandCategoryIds(filters.categories);
+  const categoryCount = (id: string) =>
+    products.filter((product) => product.prestaShop?.categoryAncestorIds.includes(id)).length;
+
+  const renderCategory = (category: (typeof categories)[number], depth = 0): React.ReactNode => {
+    const children = categories
+      .filter((child) => child.active && child.parentId === category.id)
+      .sort((left, right) => left.name.localeCompare(right.name));
+
+    return (
+      <div key={category.id}>
+        <CheckRow
+          label={category.name}
+          count={categoryCount(category.id)}
+          checked={filters.categories.includes(category.id)}
+          indented={depth > 0}
+          onToggle={() => toggleArrayValue("categories", category.id)}
+        />
+        {children.map((child) => renderCategory(child, depth + 1))}
+      </div>
+    );
+  };
 
   return (
     <div className="space-y-6">
@@ -97,68 +118,10 @@ export function FiltersBody({
       <section aria-label="Filter by category">
         <SectionLabel>Category</SectionLabel>
         <div className="space-y-1">
-          {CATEGORY_GROUPS.map((g) => {
-            const GroupIcon = g.icon;
-            const deptSelected = g.categoryIds.some((id) => filters.categories.includes(id));
-            const deptCount = g.categoryIds.reduce(
-              (sum, id) => sum + effectiveItemCount(CATEGORY_BY_ID[id]),
-              0
-            );
-            return (
-              <div key={g.id}>
-                <button
-                  onClick={() => toggleArrayValue("categories", g.id)}
-                  aria-pressed={deptSelected}
-                  className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left transition hover:bg-soft"
-                >
-                  <GroupIcon className="size-3.5 text-forest-700" aria-hidden />
-                  <span className="flex-1 text-[11px] font-bold uppercase tracking-wider text-charcoal">
-                    {g.name}
-                  </span>
-                  <span
-                    className={cn(
-                      "rounded-full px-2 py-0.5 text-[10px] font-bold transition",
-                      deptSelected ? "bg-forest-900 text-white" : "bg-forest-50 text-forest-700"
-                    )}
-                  >
-                    {deptCount}
-                  </span>
-                </button>
-                <div>
-                  {g.categoryIds.map((catId) => {
-                    const cat = CATEGORY_BY_ID[catId];
-                    if (!cat) return null;
-                    const hasChildren = Boolean(cat.childIds?.length);
-                    return (
-                      <div key={cat.id}>
-                        <CheckRow
-                          label={cat.name}
-                          count={effectiveItemCount(cat)}
-                          checked={filters.categories.includes(cat.id)}
-                          onToggle={() => toggleArrayValue("categories", cat.id)}
-                        />
-                        {hasChildren &&
-                          cat.childIds!.map((childId) => {
-                            const child = CATEGORY_BY_ID[childId];
-                            if (!child) return null;
-                            return (
-                              <CheckRow
-                                key={child.id}
-                                label={child.name}
-                                count={child.itemCount}
-                                checked={expandedSelected.includes(child.id) && filters.categories.includes(child.id)}
-                                indented
-                                onToggle={() => toggleArrayValue("categories", child.id)}
-                              />
-                            );
-                          })}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })}
+          {categories
+            .filter((category) => category.active && category.level === 2)
+            .sort((left, right) => left.name.localeCompare(right.name))
+            .map((category) => renderCategory(category))}
         </div>
       </section>
 
@@ -209,47 +172,6 @@ export function FiltersBody({
         </div>
       </section>
 
-      {/* Rating */}
-      <section aria-label="Filter by rating">
-        <SectionLabel>Rating</SectionLabel>
-        <div className="flex flex-wrap gap-2 px-2.5">
-          {[4.5, 4, 3.5].map((r) => (
-            <button
-              key={r}
-              onClick={() => onChange({ ...filters, minRating: filters.minRating === r ? null : r })}
-              aria-pressed={filters.minRating === r}
-              className={cn(
-                "inline-flex items-center gap-1 rounded-full border px-3 py-1.5 text-xs font-bold transition",
-                filters.minRating === r
-                  ? "border-forest-800 bg-forest-900 text-white"
-                  : "border-forest-100 bg-white text-charcoal hover:border-forest-300"
-              )}
-            >
-              <Star
-                className={cn("size-3.5", filters.minRating === r ? "fill-white" : "fill-amber-400 text-amber-400")}
-                aria-hidden
-              />
-              {r}+
-            </button>
-          ))}
-        </div>
-      </section>
-
-      {/* Seller */}
-      <section aria-label="Filter by seller">
-        <SectionLabel>Seller</SectionLabel>
-        <div className="max-h-44 space-y-0.5 overflow-y-auto pr-1">
-          {SELLERS.map((s) => (
-            <CheckRow
-              key={s.id}
-              label={s.farmName}
-              count={undefined}
-              checked={filters.sellers.includes(s.id)}
-              onToggle={() => toggleArrayValue("sellers", s.id)}
-            />
-          ))}
-        </div>
-      </section>
     </div>
   );
 }

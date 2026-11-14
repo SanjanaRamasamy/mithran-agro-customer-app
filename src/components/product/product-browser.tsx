@@ -75,7 +75,7 @@ export function ProductBrowser({
       <EmptyState
         icon={PackageSearch}
         title="No products match those filters"
-        description="Try widening the price range, clearing a category, or removing a preference — new arrivals land every day."
+        description="Try adjusting the search or clearing one or more filters."
         secondaryAction={{ label: "Reset all filters", onClick: onReset }}
       />
     );

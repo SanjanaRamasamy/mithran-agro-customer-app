@@ -21,7 +21,13 @@ export function matchesFilters(product: Product, f: FilterState): boolean {
   if (f.categories.length) {
     // collections (women/men/kids) and departments expand to leaf categories
     const expanded = expandCategoryIds(f.categories);
-    if (!expanded.includes(product.categoryId)) return false;
+    const productCategories = new Set([
+      product.categoryId,
+      ...(product.prestaShop?.categoryIds ?? []),
+      ...(product.prestaShop?.categoryAncestorIds ?? []),
+      ...(product.prestaShop?.categorySlugs ?? []),
+    ]);
+    if (!expanded.some((categoryId) => productCategories.has(categoryId))) return false;
   }
   if (f.sellers.length && !f.sellers.includes(product.sellerId)) return false;
   const price = getLowestVariantPrice(product).price;
@@ -82,6 +88,7 @@ export function searchProducts(products: Product[], term: string): Product[] {
         p.brand ?? "",
         p.fabric ?? "",
         catText,
+        ...(p.prestaShop?.categoryNames ?? []),
         ...p.tags,
       ]
         .join(" ")

@@ -13,6 +13,8 @@ export function generateStaticParams() {
   return [...catSlugs, ...groupSlugs];
 }
 
+export const dynamicParams = false;
+
 export async function generateMetadata({
   params,
 }: {

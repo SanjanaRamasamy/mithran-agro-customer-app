@@ -3,15 +3,36 @@
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { ArrowRight } from "lucide-react";
-import { CATEGORIES, effectiveItemCount } from "@/data/categories";
+import { CATEGORIES } from "@/data/categories";
 import { SmartImage } from "@/components/ui/smart-image";
+import { useCatalog } from "@/contexts/CatalogContext";
 
 /**
  * Shop by Category — the five Mithren Agro business lines as rich
  * image cards. Mobile: horizontal snap scroll.
  */
 export function CategoryGrid() {
-  const featured = CATEGORIES.filter((c) => c.featured);
+  const { categories, products, status } = useCatalog();
+  const featured = CATEGORIES.filter((category) => category.featured).flatMap((category) => {
+    const liveCategory = categories.find((candidate) => candidate.slug === category.slug);
+    if (!liveCategory) return [];
+    const count = products.filter((product) =>
+      product.prestaShop?.categorySlugs.includes(liveCategory.slug)
+    ).length;
+    return [{ ...category, liveCategory, count }];
+  });
+
+  if (status === "loading") {
+    return (
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5" aria-label="Loading categories">
+        {Array.from({ length: 5 }).map((_, index) => (
+          <div key={index} className="shimmer h-52 rounded-3xl" />
+        ))}
+      </div>
+    );
+  }
+
+  if (featured.length === 0) return null;
 
   return (
     <div
@@ -21,7 +42,6 @@ export function CategoryGrid() {
     >
       {featured.map((cat, i) => {
         const Icon = cat.icon;
-        const count = effectiveItemCount(cat);
         return (
           <motion.div
             key={cat.id}
@@ -33,7 +53,7 @@ export function CategoryGrid() {
             className="w-52 shrink-0 sm:w-auto"
           >
             <Link
-              href={`/category/${cat.slug}`}
+              href={`/category/${cat.liveCategory.slug}`}
               className="group relative flex h-52 flex-col justify-end overflow-hidden rounded-3xl border border-forest-50 shadow-soft transition-shadow hover:shadow-lift"
             >
               <SmartImage
@@ -51,8 +71,8 @@ export function CategoryGrid() {
                   <span className="mb-1.5 inline-flex size-8 items-center justify-center rounded-xl bg-white/15 ring-1 ring-white/25 backdrop-blur-sm">
                     <Icon className="size-4" aria-hidden />
                   </span>
-                  <p className="truncate text-base font-extrabold tracking-tight">{cat.name}</p>
-                  <p className="text-[11px] font-semibold text-white/75">{count} products</p>
+                  <p className="truncate text-base font-extrabold tracking-tight">{cat.liveCategory.name}</p>
+                  <p className="text-[11px] font-semibold text-white/75">{cat.count} products</p>
                 </div>
                 <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-white/15 ring-1 ring-white/25 transition-transform duration-300 group-hover:translate-x-0.5">
                   <ArrowRight className="size-4" aria-hidden />

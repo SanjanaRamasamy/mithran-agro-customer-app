@@ -18,6 +18,7 @@ import { useCart } from "@/contexts/CartContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useOrders } from "@/contexts/OrdersContext";
 import { useToast } from "@/contexts/NotificationContext";
+import { useCatalog } from "@/contexts/CatalogContext";
 import { OrderSummary } from "@/components/cart/order-summary";
 import { DELIVERY_SLOTS } from "@/data/banners";
 import { PAYMENT_METHODS } from "@/constants";
@@ -76,6 +77,12 @@ export function CheckoutForm() {
   const { user, addresses, addAddress, isAuthenticated } = useAuth();
   const { placeOrder } = useOrders();
   const { toast } = useToast();
+  const { reload } = useCatalog();
+  const hasUnavailableItems = lines.some((line) => {
+    const minimum = line.product.prestaShop?.minimumQuantity ?? 1;
+    const stock = line.variant.stockCount;
+    return !line.variant.inStock || line.quantity < minimum || (stock !== undefined && line.quantity > stock);
+  });
 
   const [selectedAddressId, setSelectedAddressId] = useState<string>(
     addresses.find((a) => a.isDefault)?.id ?? addresses[0]?.id ?? ""
@@ -141,9 +148,13 @@ export function CheckoutForm() {
     toast({ title: "Address saved", description: "Simulated — stored locally for this demo." });
   };
 
-  const placeOrderNow = () => {
+  const placeOrderNow = async () => {
     if (!validateContact()) return;
     if (lines.length === 0) return;
+    if (hasUnavailableItems) {
+      toast({ kind: "error", title: "One or more basket items are unavailable." });
+      return;
+    }
     const address = addresses.find((a) => a.id === selectedAddressId) ?? addresses[0];
     if (!address) {
       toast({ kind: "error", title: "Please add a delivery address first." });
@@ -152,6 +163,39 @@ export function CheckoutForm() {
     }
 
     setPlacing(true);
+    try {
+      const response = await fetch("/api/prestashop/products", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        cache: "no-store",
+        body: JSON.stringify({
+          items: lines.map((line) => ({
+            productId: line.product.prestaShop?.productId ?? line.product.id,
+            quantity: line.quantity,
+            expectedPrice: line.variant.price,
+          })),
+        }),
+      });
+      const payload: unknown = await response.json();
+      const validationMessage =
+        typeof payload === "object" && payload !== null && "message" in payload && typeof payload.message === "string"
+          ? payload.message
+          : "Unable to verify current product availability.";
+      if (!response.ok || typeof payload !== "object" || payload === null || !("success" in payload) || payload.success !== true) {
+        toast({ kind: "error", title: validationMessage });
+        reload();
+        setPlacing(false);
+        return;
+      }
+    } catch (error) {
+      toast({
+        kind: "error",
+        title: error instanceof Error ? error.message : "Unable to verify your basket.",
+      });
+      setPlacing(false);
+      return;
+    }
+
     /* simulate payment + order creation latency */
     window.setTimeout(() => {
       const id = orderNumber(Math.floor(100000 + Math.random() * 899999));
@@ -161,7 +205,7 @@ export function CheckoutForm() {
         variantId: l.variantId,
         name: l.product.name,
         image: l.product.images[0],
-        sellerName: l.product.sellerId,
+        sellerName: l.product.prestaShop ? "Mithran Agro" : l.product.sellerId,
         packLabel: l.variant.name,
         quantity: l.quantity,
         price: l.variant.price,
@@ -251,6 +295,21 @@ export function CheckoutForm() {
         >
           <ShoppingBasket className="size-4" aria-hidden />
           Browse produce
+        </button>
+      </div>
+    );
+  }
+
+  if (hasUnavailableItems) {
+    return (
+      <div role="alert" className="mx-auto max-w-xl rounded-2xl border border-amber-200 bg-amber-50 px-6 py-10 text-center">
+        <h1 className="text-xl font-bold text-charcoal">Review your basket</h1>
+        <p className="mt-2 text-sm text-graymute">Some items are out of stock or no longer meet their minimum quantity.</p>
+        <button
+          onClick={() => router.push("/cart")}
+          className="mt-5 inline-flex h-11 items-center gap-2 rounded-xl bg-forest-900 px-5 text-sm font-bold text-white"
+        >
+          Return to basket
         </button>
       </div>
     );

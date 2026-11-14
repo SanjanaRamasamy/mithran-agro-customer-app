@@ -52,6 +52,7 @@ function KindMeta({ product, className }: { product: Product; className?: string
   const kind = categoryKind(product);
 
   if (kind === "produce") {
+    if (!product.origin && !product.freshnessNote) return null;
     return (
       <p className={cn("flex min-w-0 items-center gap-1 truncate text-[11px] text-graymute", className)}>
         <MapPin className="size-3 shrink-0" aria-hidden />
@@ -80,10 +81,12 @@ function KindMeta({ product, className }: { product: Product; className?: string
   }
 
   if (kind === "agri-input") {
+    const details = product.composition ?? product.tagline;
+    if (!details) return null;
     return (
       <p className={cn("flex min-w-0 items-center gap-1 truncate text-[11px] text-graymute", className)}>
         <FlaskConical className="size-3 shrink-0" aria-hidden />
-        <span className="truncate">{product.composition ?? product.tagline}</span>
+        <span className="truncate">{details}</span>
       </p>
     );
   }
@@ -122,6 +125,7 @@ function KindMeta({ product, className }: { product: Product; className?: string
   }
 
   /* grocery + default */
+  if (!product.origin) return null;
   return (
     <p className={cn("flex min-w-0 items-center gap-1 truncate text-[11px] text-graymute", className)}>
       <MapPin className="size-3 shrink-0" aria-hidden />
@@ -243,9 +247,9 @@ function ProductCardInner({ product, view = "grid", className, priority }: Produ
                   {product.name}
                 </h3>
               </Link>
-              <p className="mt-0.5 truncate text-xs text-graymute">
-                by {seller?.farmName ?? "Verified seller"}
-              </p>
+              {seller && (
+                <p className="mt-0.5 truncate text-xs text-graymute">by {seller.farmName}</p>
+              )}
               <KindMeta product={product} className="mt-0.5" />
               {kind === "agri-input" && <AgriSpec product={product} />}
             </div>
@@ -268,7 +272,9 @@ function ProductCardInner({ product, view = "grid", className, priority }: Produ
             {product.isSeasonal && <ProduceBadge badge="seasonal" compact />}
             {isFashion ? <SizeChips product={product} /> : <VariantChips product={product} />}
           </div>
-          <Rating value={product.rating} count={product.reviewCount} className="mt-1.5" />
+          {product.reviewCount > 0 && (
+            <Rating value={product.rating} count={product.reviewCount} className="mt-1.5" />
+          )}
           <div className="mt-auto flex flex-wrap items-end justify-between gap-2 pt-2">
             <Price price={best.price} mrp={best.mrp} />
             <button
@@ -345,29 +351,37 @@ function ProductCardInner({ product, view = "grid", className, priority }: Produ
 
       {/* Body */}
       <div className="flex flex-1 flex-col gap-1.5 p-3.5">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-forest-600">
-          {seller?.farmName ?? "Verified seller"}
-        </p>
+        {seller && (
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-forest-600">
+            {seller.farmName}
+          </p>
+        )}
         <Link href={href} className="line-clamp-2 text-sm font-bold leading-snug text-charcoal hover:text-forest-800">
           {product.name}
         </Link>
         <KindMeta product={product} />
         {kind === "agri-input" && <AgriSpec product={product} />}
         {isFashion ? <SizeChips product={product} /> : <VariantChips product={product} />}
-        <Rating value={product.rating} count={product.reviewCount} className="mt-0.5" />
+        {product.reviewCount > 0 && (
+          <Rating value={product.rating} count={product.reviewCount} className="mt-0.5" />
+        )}
 
         <div className="mt-auto flex items-end justify-between gap-2 pt-2">
           <div className="min-w-0">
             <Price price={cheapest.price} mrp={cheapest.mrp} size="sm" />
-            <p className="mt-0.5 truncate text-[11px] text-graymute">
-              from · {cheapest.name}
-            </p>
+            {!best.inStock && (
+              <p className="mt-0.5 text-[11px] font-semibold text-red-600">Out of stock</p>
+            )}
+            {best.inStock && cheapest.name && (
+              <p className="mt-0.5 truncate text-[11px] text-graymute">{cheapest.name}</p>
+            )}
           </div>
           <motion.button
             onClick={handleAdd}
             disabled={!best.inStock}
             whileTap={{ scale: 0.88 }}
             aria-label={`Add ${product.name} to basket`}
+            title={best.inStock ? "Add to basket" : "Out of stock"}
             className={cn(
               "flex size-10 shrink-0 items-center justify-center rounded-xl transition-colors",
               best.inStock

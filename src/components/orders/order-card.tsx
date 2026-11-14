@@ -9,14 +9,15 @@ import { SmartImage } from "@/components/ui/smart-image";
 import { formatDateTime, formatPrice } from "@/utils/format";
 import { useOrders } from "@/contexts/OrdersContext";
 import { useCart } from "@/contexts/CartContext";
+import { useCatalog } from "@/contexts/CatalogContext";
 import { useToast } from "@/contexts/NotificationContext";
-import { PRODUCT_BY_ID } from "@/data/products";
 import { cn } from "@/lib/utils";
 
 export function OrderCard({ order }: { order: Order }) {
   const statusCfg = ORDER_STATUS_CONFIG[order.status];
   const { reorder } = useOrders();
   const cart = useCart();
+  const { products } = useCatalog();
   const { toast } = useToast();
   const preview = order.items.slice(0, 4);
 
@@ -24,7 +25,7 @@ export function OrderCard({ order }: { order: Order }) {
     const res = reorder(order.id);
     let added = 0;
     for (const item of order.items) {
-      if (PRODUCT_BY_ID[item.productId]) {
+      if (products.some((product) => product.id === item.productId)) {
         cart.addItem(item.productId, item.variantId, item.quantity);
         added += 1;
       }
@@ -61,7 +62,7 @@ export function OrderCard({ order }: { order: Order }) {
         {preview.map((item) => (
           <SmartImage
             key={item.id}
-            src={item.image || PRODUCT_BY_ID[item.productId]?.images[0]}
+            src={item.image}
             alt={item.name}
             emojiSeed={item.name}
             rounded="rounded-xl"

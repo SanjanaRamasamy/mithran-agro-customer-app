@@ -57,6 +57,24 @@ export interface Product {
   deliveryEligible: boolean; // express slot eligible
   createdAt: string; // for "Fresh Today"
   unitsSold?: number;
+  prestaShop?: {
+    productId: string;
+    categoryIds: string[];
+    categoryAncestorIds: string[];
+    categorySlugs: string[];
+    categoryNames: string[];
+    categoryName: string;
+    imageIds: string[];
+    stockAvailableIds: string[];
+    minimumQuantity: number;
+    quantity: number;
+    unitPrice?: number;
+    wholesalePrice?: number;
+    active: boolean;
+    availableForOrder: boolean;
+    visibility: string;
+    unit: string;
+  };
 
   /* ---- category-specific attributes (all optional) ---- */
   brand?: string;            // featured brand label

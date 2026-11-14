@@ -2,17 +2,16 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { Sparkles } from "lucide-react";
+import { Grid3X3, RefreshCw, Sparkles } from "lucide-react";
 import type { FilterState, Product, SortOption } from "@/types";
 import {
   CATEGORY_BY_ID,
+  CATEGORY_BY_SLUG,
   CATEGORY_GROUP_BY_ID,
-  expandCategoryIds,
-  effectiveItemCount,
 } from "@/data/categories";
-import { PRODUCTS } from "@/data/products";
+import { useCatalog } from "@/contexts/CatalogContext";
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FiltersPanel } from "@/components/product/filters-panel";
@@ -35,52 +34,66 @@ interface CategoryLandingProps {
  * banner, subcategory grid, featured strip, filters and sorting.
  */
 export function CategoryLanding({ slug }: CategoryLandingProps) {
+  const { products, categories, categoriesError, status, error, reload } = useCatalog();
   const cat = CATEGORY_BY_ID[slug];
   const group = CATEGORY_GROUP_BY_ID[slug];
+  const liveCategory = categories.find((category) => category.slug === slug);
 
   const dept = cat ? CATEGORY_GROUP_BY_ID[cat.group] : group;
-  const name = cat?.name ?? group?.name ?? "Shop";
-  const description = cat?.description ?? group?.description ?? "";
+  const name = liveCategory?.name ?? cat?.name ?? group?.name ?? "Shop";
+  const description = liveCategory?.description ?? "";
   const banner = cat?.image ?? group?.image ?? "";
 
   /* which category ids does this page cover? */
   const scopeIds = useMemo(() => {
-    if (cat) return expandCategoryIds([cat.id]);
-    if (group) return group.categoryIds;
-    return [];
-  }, [cat, group]);
+    if (!liveCategory) return new Set<string>();
+    const ids = new Set<string>();
+    const visit = (categoryId: string) => {
+      if (ids.has(categoryId)) return;
+      ids.add(categoryId);
+      for (const child of categories.filter((candidate) => candidate.parentId === categoryId)) {
+        visit(child.id);
+      }
+    };
+    visit(liveCategory.id);
+    return ids;
+  }, [liveCategory, categories]);
 
   const scopeProducts = useMemo(
-    () => PRODUCTS.filter((p) => scopeIds.includes(p.categoryId)),
-    [scopeIds]
+    () => products.filter((product) =>
+      product.prestaShop?.categoryIds.some((categoryId) => scopeIds.has(categoryId))
+    ),
+    [products, scopeIds]
   );
+
+  const subcats = useMemo(() => {
+    if (!liveCategory) return [];
+    const children = categories.filter(
+      (candidate) => candidate.active && candidate.parentId === liveCategory.id
+    );
+    return (children.length
+      ? children
+      : categories.filter(
+          (candidate) => candidate.active && candidate.parentId === liveCategory.parentId && candidate.id !== liveCategory.id
+        )
+    ).sort((left, right) => left.name.localeCompare(right.name));
+  }, [liveCategory, categories]);
+
+  const activeCategoryFilter = liveCategory?.id ?? slug;
 
   const [filters, setFilters] = useState<FilterState>(() => ({
     ...DEFAULT_FILTERS,
-    categories: cat ? [cat.id] : group ? group.categoryIds : [],
+    categories: activeCategoryFilter ? [activeCategoryFilter] : [],
     priceRange: [...PRICE_BOUNDS] as [number, number],
   }));
   const [sort, setSort] = useState<SortOption>("relevance");
 
-  /* subcategory tiles: department pages show their categories;
-     collections (women/men/kids) show their children;
-     leaf categories show siblings from the same department. */
-  const subcats = useMemo(() => {
-    if (cat?.childIds?.length) return cat.childIds.map((id) => CATEGORY_BY_ID[id]).filter(Boolean);
-    if (cat) {
-      return (dept?.categoryIds ?? [])
-        .map((id) => CATEGORY_BY_ID[id])
-        .filter((c): c is NonNullable<typeof c> => Boolean(c) && c.id !== cat.id);
-    }
-    if (group) return group.categoryIds.map((id) => CATEGORY_BY_ID[id]).filter(Boolean);
-    return [];
-  }, [cat, group, dept]);
+  useEffect(() => {
+    setFilters((current) => ({ ...current, categories: [activeCategoryFilter] }));
+  }, [activeCategoryFilter]);
 
   const featured = useMemo(
-    () =>
-      [...scopeProducts]
-        .sort((a, b) => b.rating * Math.log10(b.reviewCount + 10) - a.rating * Math.log10(a.reviewCount + 10))
-        .slice(0, 4),
+    () => [...scopeProducts].slice(0, 4),
     [scopeProducts]
   );
 
@@ -91,6 +104,19 @@ export function CategoryLanding({ slug }: CategoryLandingProps) {
 
   const parentGroup = dept;
   const isDeptPage = Boolean(group) && !cat;
+  const isCollectionPage = categories.some((category) => category.parentId === liveCategory?.id);
+
+  if (categoriesError) {
+    return (
+      <div role="alert" className="mx-auto max-w-3xl px-4 py-16 text-center">
+        <h1 className="text-xl font-bold text-charcoal">Categories are temporarily unavailable</h1>
+        <p className="mt-2 text-sm text-graymute">{categoriesError}</p>
+        <button onClick={reload} className="mt-4 inline-flex h-10 items-center rounded-xl bg-forest-900 px-4 text-sm font-bold text-white">
+          Retry
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8">
@@ -141,24 +167,21 @@ export function CategoryLanding({ slug }: CategoryLandingProps) {
           )}
           <div className="absolute inset-0 bg-gradient-to-r from-forest-950/80 via-forest-950/45 to-transparent" />
           <div className="absolute inset-0 flex flex-col justify-end p-6 sm:p-10">
-            {parentGroup?.tagline && (
-              <p className="text-[11px] font-bold uppercase tracking-widest text-lime-natural">
-                {parentGroup.tagline}
-              </p>
-            )}
             <h1 className="mt-1 text-3xl font-extrabold tracking-tight text-white sm:text-4xl">
               {name}
             </h1>
-            <p className="mt-2 max-w-2xl text-sm leading-relaxed text-forest-50/90 sm:text-[15px]">
-              {description}
-            </p>
+            {description && (
+              <p className="mt-2 max-w-2xl text-sm leading-relaxed text-forest-50/90 sm:text-[15px]">
+                {description}
+              </p>
+            )}
             <p className="mt-3 text-xs font-semibold text-white/80">
               {scopeProducts.length} {scopeProducts.length === 1 ? "product" : "products"} ·{" "}
-              {subcats.length > 0
-                ? cat?.childIds?.length || !cat
+                  {subcats.length > 0
+                ? subcats.some((subcat) => subcat.parentId === liveCategory?.id)
                   ? `${subcats.length} ${subcats.length === 1 ? "subcategory" : "subcategories"}`
                   : `${subcats.length} ${subcats.length === 1 ? "related category" : "related categories"}`
-                : "verified sellers"}
+                : "store categories"}
             </p>
           </div>
         </div>
@@ -169,7 +192,7 @@ export function CategoryLanding({ slug }: CategoryLandingProps) {
         <section aria-label={`Shop ${name} subcategories`} className="mt-8">
           <div className="mb-4 flex items-end justify-between gap-3">
             <h2 className="text-lg font-extrabold tracking-tight text-charcoal sm:text-xl">
-              {cat?.childIds?.length ? `Shop all ${cat.name}` : isDeptPage ? "Shop by category" : "More in this department"}
+              {isCollectionPage ? `Shop all ${name}` : isDeptPage ? "Shop by category" : "More in this department"}
             </h2>
             <Link
               href="/search"
@@ -180,7 +203,10 @@ export function CategoryLanding({ slug }: CategoryLandingProps) {
           </div>
           <div className="no-scrollbar -mx-4 flex gap-3 overflow-x-auto px-4 pb-2 sm:mx-0 sm:grid sm:grid-cols-3 sm:overflow-visible sm:px-0 lg:grid-cols-4 xl:grid-cols-6">
             {subcats.slice(0, 12).map((sub, i) => {
-              const SubIcon = sub.icon;
+              const SubIcon = CATEGORY_BY_SLUG[sub.slug]?.icon ?? Grid3X3;
+              const subCount = products.filter((product) =>
+                product.prestaShop?.categoryAncestorIds.includes(sub.id)
+              ).length;
               return (
                 <motion.div
                   key={sub.id}
@@ -201,7 +227,7 @@ export function CategoryLanding({ slug }: CategoryLandingProps) {
                       {sub.name}
                     </span>
                     <span className="text-[11px] font-semibold text-graymute">
-                      {effectiveItemCount(sub)} products
+                      {subCount} products
                     </span>
                   </Link>
                 </motion.div>
@@ -213,11 +239,11 @@ export function CategoryLanding({ slug }: CategoryLandingProps) {
 
       {/* ---------------------------- featured strip ---------------------------- */}
       {featured.length > 0 && (
-        <section aria-label={`Featured ${name} products`} className="mt-10">
+        <section aria-label={`Products in ${name}`} className="mt-10">
           <div className="mb-4 flex items-center gap-2">
             <Sparkles className="size-4 text-forest-700" aria-hidden />
             <h2 className="text-lg font-extrabold tracking-tight text-charcoal sm:text-xl">
-              Featured in {name}
+              Products in {name}
             </h2>
           </div>
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
@@ -260,10 +286,10 @@ export function CategoryLanding({ slug }: CategoryLandingProps) {
         {subcats.length > 0 && (
           <div className="no-scrollbar mb-4 flex gap-2 overflow-x-auto pb-1">
             <button
-              onClick={() => setFilters((f) => ({ ...f, categories: cat ? [cat.id] : group!.categoryIds }))}
+              onClick={() => setFilters((f) => ({ ...f, categories: [activeCategoryFilter] }))}
               className={cn(
                 "shrink-0 rounded-full border px-3.5 py-1.5 text-xs font-bold transition",
-                filters.categories.length === (cat ? 1 : group!.categoryIds.length)
+                filters.categories.length === 1 && filters.categories[0] === activeCategoryFilter
                   ? "border-forest-900 bg-forest-900 text-white"
                   : "border-forest-100 bg-white/80 text-charcoal hover:border-forest-300"
               )}
@@ -294,19 +320,30 @@ export function CategoryLanding({ slug }: CategoryLandingProps) {
         <div className="flex items-start gap-6">
           <FiltersPanel filters={filters} onChange={setFilters} resultCount={resultCount} />
           <div className="min-w-0 flex-1">
-            <ProductBrowser
-              products={scopeProducts}
-              term=""
-              filters={filters}
-              sort={sort}
-              onReset={() =>
-                setFilters({
+            {status === "loading" ? (
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4" aria-label="Loading products">
+                {Array.from({ length: 8 }).map((_, index) => <div key={index} className="shimmer aspect-[3/4] rounded-2xl" />)}
+              </div>
+            ) : status === "error" ? (
+              <div role="alert" className="rounded-2xl border border-red-100 bg-white p-6 text-center">
+                <p className="text-sm font-semibold text-charcoal">{error}</p>
+                <button onClick={reload} className="mt-4 inline-flex h-10 items-center gap-2 rounded-xl bg-forest-900 px-4 text-sm font-bold text-white">
+                  <RefreshCw className="size-4" aria-hidden /> Retry
+                </button>
+              </div>
+            ) : (
+              <ProductBrowser
+                products={scopeProducts}
+                term=""
+                filters={filters}
+                sort={sort}
+                onReset={() => setFilters({
                   ...DEFAULT_FILTERS,
-                  categories: cat ? [cat.id] : group ? group.categoryIds : [],
+                  categories: activeCategoryFilter ? [activeCategoryFilter] : [],
                   priceRange: [...PRICE_BOUNDS] as [number, number],
-                })
-              }
-            />
+                })}
+              />
+            )}
           </div>
         </div>
       </section>
@@ -331,13 +368,15 @@ function FeaturedMiniCard({ product, priority }: { product: Product; priority?: 
           sizes="(max-width: 1024px) 50vw, 25vw"
           priority={priority}
         />
-        <Rating value={product.rating} count={product.reviewCount} className="absolute bottom-2 left-2 rounded-full bg-white/85 px-2 py-0.5" />
+        {product.reviewCount > 0 && (
+          <Rating value={product.rating} count={product.reviewCount} className="absolute bottom-2 left-2 rounded-full bg-white/85 px-2 py-0.5" />
+        )}
       </div>
       <div className="p-3.5">
         <p className="line-clamp-1 text-sm font-bold text-charcoal group-hover:text-forest-800">
           {product.name}
         </p>
-        <p className="mt-0.5 line-clamp-1 text-xs text-graymute">{product.tagline}</p>
+        {product.tagline && <p className="mt-0.5 line-clamp-1 text-xs text-graymute">{product.tagline}</p>}
         <Price price={cheapest.price} mrp={cheapest.mrp} size="sm" className="mt-2" />
       </div>
     </Link>

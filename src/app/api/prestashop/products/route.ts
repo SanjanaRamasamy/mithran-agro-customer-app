@@ -37,6 +37,10 @@ function extractProducts(payload: unknown): unknown[] | null {
 
   const products = root.products ?? root.product;
 
+  if (products === "") {
+    return [];
+  }
+
   if (Array.isArray(products)) {
     return products;
   }
@@ -49,7 +53,17 @@ function extractProducts(payload: unknown): unknown[] | null {
     }
 
     if (isRecord(productCollection)) {
-      return [productCollection];
+      return Object.keys(productCollection).length === 0
+        ? []
+        : [productCollection];
+    }
+
+    if (productCollection === "") {
+      return [];
+    }
+
+    if (Object.keys(products).length === 0) {
+      return [];
     }
   }
 
@@ -98,6 +112,17 @@ export async function GET() {
     const contentType = response.headers.get("content-type") ?? "";
 
     if (!response.ok) {
+      const message =
+        response.status === 401
+          ? "PrestaShop authentication failed."
+          : response.status === 403
+            ? "PrestaShop denied access to products."
+            : response.status === 404
+              ? "PrestaShop products endpoint was not found."
+              : response.status >= 500
+                ? "PrestaShop encountered a server error."
+                : "Unable to retrieve products from PrestaShop.";
+
       console.error("PrestaShop Products API request failed:", {
         status: response.status,
         contentType,
@@ -106,7 +131,7 @@ export async function GET() {
       return NextResponse.json(
         {
           success: false,
-          message: "Unable to retrieve products from PrestaShop.",
+          message,
           upstreamStatus: response.status,
           products: [],
         },
@@ -155,25 +180,133 @@ export async function GET() {
       );
     }
 
-    return NextResponse.json(
-      {
-        success: true,
-        message: "Products retrieved successfully.",
-        total: products.length,
-        products,
-      },
-      { status: 200 }
-    );
+    const hasProducts = products.length > 0;
+
+    return NextResponse.json({
+      success: true,
+      connected: true,
+      message: hasProducts
+        ? "Products retrieved successfully."
+        : "PrestaShop connected successfully. No products are available yet.",
+      total: products.length,
+      products,
+    });
   } catch (error) {
-    console.error("Products API unexpected error:", error);
+    console.error("Products API unexpected error:", {
+      errorType: error instanceof Error ? error.name : typeof error,
+    });
 
     return NextResponse.json(
       {
         success: false,
-        message: "An unexpected error occurred while retrieving products.",
+        message: "Unable to connect to PrestaShop or retrieve products.",
         products: [],
       },
-      { status: 500 }
+      { status: 502 }
+    );
+  }
+}
+
+function isEnabled(value: unknown): boolean {
+  return value === true || value === 1 || value === "1";
+}
+
+function numberValue(value: unknown): number | undefined {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim() !== "") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }
+  return undefined;
+}
+
+export async function POST(request: Request) {
+  try {
+    const body: unknown = await request.json();
+    if (!isRecord(body) || !Array.isArray(body.items) || body.items.length === 0) {
+      return NextResponse.json(
+        { success: false, message: "A non-empty basket is required for validation." },
+        { status: 400 }
+      );
+    }
+
+    const requestedItems: { productId: string; quantity: number; expectedPrice: number }[] = [];
+    for (const item of body.items) {
+      if (!isRecord(item)) {
+        return NextResponse.json({ success: false, message: "Invalid basket item." }, { status: 400 });
+      }
+      const productId = typeof item.productId === "string" ? item.productId : "";
+      const quantity = numberValue(item.quantity);
+      const expectedPrice = numberValue(item.expectedPrice);
+      if (
+        !/^\d+$/.test(productId) ||
+        !quantity ||
+        quantity < 1 ||
+        expectedPrice === undefined ||
+        expectedPrice < 0
+      ) {
+        return NextResponse.json({ success: false, message: "Invalid basket item." }, { status: 400 });
+      }
+      requestedItems.push({ productId, quantity, expectedPrice });
+    }
+
+    const catalogResponse = await GET();
+    const catalogPayload: unknown = await catalogResponse.json();
+    if (
+      !catalogResponse.ok ||
+      !isRecord(catalogPayload) ||
+      catalogPayload.success !== true ||
+      !Array.isArray(catalogPayload.products)
+    ) {
+      return NextResponse.json(
+        { success: false, message: "Unable to verify current PrestaShop inventory." },
+        { status: 502 }
+      );
+    }
+
+    for (const item of requestedItems) {
+      const product = catalogPayload.products.find(
+        (candidate) => isRecord(candidate) && String(candidate.id) === item.productId
+      );
+      if (!isRecord(product)) {
+        return NextResponse.json(
+          { success: false, message: "A basket product is no longer available." },
+          { status: 409 }
+        );
+      }
+
+      const stock = numberValue(product.quantity) ?? 0;
+      const minimum = Math.max(1, numberValue(product.minimal_quantity) ?? 1);
+      const price = numberValue(product.price);
+      if (
+        !isEnabled(product.active) ||
+        !isEnabled(product.available_for_order) ||
+        product.visibility === "none"
+      ) {
+        return NextResponse.json(
+          { success: false, message: "A basket product is no longer available to order." },
+          { status: 409 }
+        );
+      }
+      if (item.quantity < minimum || item.quantity > stock) {
+        return NextResponse.json(
+          { success: false, message: "A basket quantity no longer meets the minimum or available stock." },
+          { status: 409 }
+        );
+      }
+      if (price === undefined || Math.abs(price - item.expectedPrice) > 0.000001) {
+        return NextResponse.json(
+          { success: false, message: "A product price has changed. Review your basket." },
+          { status: 409 }
+        );
+      }
+    }
+
+    return NextResponse.json({ success: true, valid: true });
+  } catch {
+    return NextResponse.json(
+      { success: false, message: "Unable to validate the basket with PrestaShop." },
+      { status: 502 }
     );
   }
 }

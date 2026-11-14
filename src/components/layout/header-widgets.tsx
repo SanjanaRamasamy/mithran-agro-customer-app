@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Bell, Heart, LogOut, Moon, Package, Settings, ShoppingBasket, Sparkles, Sun, User } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
@@ -16,8 +17,22 @@ export function NotificationsBell() {
   const { notifications, unreadCount, markRead, markAllRead } = useNotifications();
   const { user } = useAuth();
   const router = useRouter();
+  const [now, setNow] = useState<number | null>(null);
 
   const latest = notifications.slice(0, 5);
+
+  useEffect(() => {
+    let interval: number | undefined;
+    const timeout = window.setTimeout(() => {
+      setNow(Date.now());
+      interval = window.setInterval(() => setNow(Date.now()), 60_000);
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timeout);
+      if (interval !== undefined) window.clearInterval(interval);
+    };
+  }, []);
 
   return (
     <div className="relative">
@@ -61,7 +76,9 @@ export function NotificationsBell() {
                     {!n.read && <span className="mt-1 size-2 shrink-0 rounded-full bg-forest-500" aria-label="unread" />}
                   </span>
                   <span className="mt-0.5 line-clamp-2 block text-xs leading-relaxed text-graymute">{n.body}</span>
-                  <span className="mt-1 block text-[11px] text-graymute/80">{timeAgo(n.timestamp)}</span>
+                  <time dateTime={n.timestamp} className="mt-1 block text-[11px] text-graymute/80">
+                    {now === null ? "—" : timeAgo(n.timestamp, now)}
+                  </time>
                 </button>
               </li>
             ))}

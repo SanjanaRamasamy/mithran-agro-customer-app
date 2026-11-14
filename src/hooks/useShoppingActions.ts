@@ -4,7 +4,7 @@ import { useCallback } from "react";
 import { useCart } from "@/contexts/CartContext";
 import { useWishlist } from "@/contexts/WishlistContext";
 import { useToast } from "@/contexts/NotificationContext";
-import { PRODUCT_BY_ID } from "@/data/products";
+import { useCatalog } from "@/contexts/CatalogContext";
 import { getBestVariant } from "@/utils/product";
 
 /**
@@ -13,25 +13,29 @@ import { getBestVariant } from "@/utils/product";
  */
 export function useShoppingActions() {
   const cart = useCart();
+  const { products } = useCatalog();
   const wishlist = useWishlist();
   const { toast } = useToast();
 
   const addToCart = useCallback(
     (productId: string, variantId?: string, quantity = 1, opts?: { silent?: boolean }) => {
-      const product = PRODUCT_BY_ID[productId];
+      const product = products.find((candidate) => candidate.id === productId);
       if (!product) return;
       const vid = variantId ?? getBestVariant(product).id;
-      const result = cart.addItem(productId, vid, quantity);
+      const requestedQuantity = product.prestaShop
+        ? Math.max(quantity, product.prestaShop.minimumQuantity)
+        : quantity;
+      const result = cart.addItem(productId, vid, requestedQuantity);
       if (result.ok) {
         if (!opts?.silent) {
           cart.openDrawer();
-          toast({ title: result.message, description: "Simulated action — no real order was placed." });
+          toast({ title: result.message });
         }
       } else {
         toast({ kind: "error", title: result.message });
       }
     },
-    [cart, toast]
+    [cart, products, toast]
   );
 
   const toggleWishlist = useCallback(
@@ -48,7 +52,7 @@ export function useShoppingActions() {
 
   const moveWishlistItemToCart = useCallback(
     (productId: string) => {
-      const product = PRODUCT_BY_ID[productId];
+      const product = products.find((candidate) => candidate.id === productId);
       if (!product) return;
       const variant = getBestVariant(product);
       if (!variant.inStock) {
@@ -63,7 +67,7 @@ export function useShoppingActions() {
         toast({ kind: "error", title: res.message });
       }
     },
-    [cart, wishlist, toast]
+    [cart, wishlist, products, toast]
   );
 
   return { addToCart, toggleWishlist, moveWishlistItemToCart };

@@ -7,19 +7,18 @@ import type { CartLine } from "@/types";
 import { useCart } from "@/contexts/CartContext";
 import { useShoppingActions } from "@/hooks/useShoppingActions";
 import { useWishlist } from "@/contexts/WishlistContext";
-import { SELLER_BY_ID } from "@/data/sellers";
 import { SmartImage } from "@/components/ui/smart-image";
 import { Price } from "@/components/ui/price";
 import { QuantityStepper } from "@/components/ui/quantity-stepper";
 import { formatPrice, packLabel } from "@/utils/format";
-import { cn } from "@/lib/utils";
 
 /** One cart row — quantity stepper, remove, save-for-later, move-to-wishlist. */
 export function CartRow({ line }: { line: CartLine }) {
   const { updateQuantity, removeItem, saveForLater } = useCart();
   const { toggleWishlist } = useShoppingActions();
 
-  const stockLeft = line.variant.stockCount ?? 99;
+  const stockLeft = line.variant.stockCount ?? 0;
+  const minimumQuantity = line.product.prestaShop?.minimumQuantity ?? 1;
 
   return (
     <AnimatePresence>
@@ -53,9 +52,9 @@ export function CartRow({ line }: { line: CartLine }) {
                 {line.variant.name} · {packLabel(line.variant.packSize.unit, line.variant.packSize.value)}
               </p>
               {line.variant.inStock ? (
-                stockLeft < 20 && (
+                  line.product.prestaShop && stockLeft < 20 && (
                   <p className="mt-0.5 text-[11px] font-semibold text-orange-600">
-                    Hurry — only {stockLeft} left in this harvest
+                    Only {stockLeft} available
                   </p>
                 )
               ) : (
@@ -68,13 +67,18 @@ export function CartRow({ line }: { line: CartLine }) {
           </div>
 
           <div className="mt-auto flex flex-wrap items-center justify-between gap-2 pt-3">
-            <QuantityStepper
-              value={line.quantity}
-              min={0}
-              onChange={(q) => updateQuantity(line.id, q)}
-              size="sm"
-              ariaLabel={`Quantity of ${line.product.name}`}
-            />
+            {line.variant.inStock ? (
+              <QuantityStepper
+                value={line.quantity}
+                min={minimumQuantity}
+                max={stockLeft || 10}
+                onChange={(q) => updateQuantity(line.id, q)}
+                size="sm"
+                ariaLabel={`Quantity of ${line.product.name}`}
+              />
+            ) : (
+              <span className="text-[11px] font-semibold text-red-600">Unavailable to order</span>
+            )}
             <div className="flex items-center gap-1">
               <button
                 onClick={() => {
@@ -106,7 +110,7 @@ export function CartRow({ line }: { line: CartLine }) {
   );
 }
 
-/** Rows grouped under a farm (multi-vendor marketplace behaviour). */
+/** Group rows by seller when verified seller data exists; otherwise show the store. */
 export function CartBySeller({ lines }: { lines: CartLine[] }) {
   const groups = lines.reduce<Record<string, CartLine[]>>((acc, line) => {
     const key = line.product.sellerId;
@@ -117,10 +121,10 @@ export function CartBySeller({ lines }: { lines: CartLine[] }) {
   return (
     <div className="space-y-5">
       {Object.entries(groups).map(([sellerId, groupLines]) => (
-        <section key={sellerId} aria-label={`Basket items from ${groupLines[0].product.sellerId}`}>
+        <section key={sellerId || "store"} aria-label={`Basket items from ${sellerId || "Mithran Agro"}`}>
           <div className="mb-2.5 flex items-center justify-between">
             <p className="text-sm font-bold text-charcoal">
-              🧑‍🌾 {SELLER_BY_ID[sellerId]?.farmName ?? "Local farm"}
+              {sellerId ? sellerId : "Mithran Agro"}
             </p>
             <span className="text-xs font-semibold text-forest-700">
               {groupLines.length} {groupLines.length === 1 ? "item" : "items"}
@@ -172,10 +176,12 @@ export function SavedForLater() {
             <div className="flex shrink-0 flex-col gap-1.5">
               <button
                 onClick={() => moveToCart(line.id)}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-forest-900 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-forest-800 active:scale-95"
+                disabled={!line.variant.inStock}
+                title={line.variant.inStock ? "Move to basket" : "Currently unavailable"}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-forest-900 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-forest-800 active:scale-95 disabled:cursor-not-allowed disabled:bg-gray-300"
               >
                 <ShoppingBasket className="size-3.5" aria-hidden />
-                Move to basket
+                {line.variant.inStock ? "Move to basket" : "Unavailable"}
               </button>
               <div className="flex justify-center gap-1">
                 <button
@@ -212,7 +218,7 @@ export function EmptyCartState() {
       <span className="text-6xl" aria-hidden>🧺</span>
       <h1 className="mt-4 text-xl font-bold text-charcoal">Your basket is empty</h1>
       <p className="mt-1.5 max-w-sm text-sm leading-relaxed text-graymute">
-        Fill it with this morning&apos;s harvest — leafy greens, hill fruits and everything in between.
+        Add products from the store catalogue to get started.
       </p>
       <Link
         href="/search"

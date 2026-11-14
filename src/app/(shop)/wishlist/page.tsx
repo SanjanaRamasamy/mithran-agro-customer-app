@@ -6,23 +6,22 @@ import { motion } from "framer-motion";
 import { Heart, ShoppingBasket, Trash2 } from "lucide-react";
 import { useWishlist } from "@/contexts/WishlistContext";
 import { useShoppingActions } from "@/hooks/useShoppingActions";
-import { PRODUCT_BY_ID } from "@/data/products";
+import { useCatalog } from "@/contexts/CatalogContext";
 import { ProductCard } from "@/components/product/product-card";
 import { EmptyState } from "@/components/ui/empty-state";
-import { SmartImage } from "@/components/ui/smart-image";
-import { Price } from "@/components/ui/price";
-import { formatPrice, timeAgo } from "@/utils/format";
+import { timeAgo } from "@/utils/format";
 
 export default function WishlistPage() {
   const wishlist = useWishlist();
+  const { products: catalogProducts, status } = useCatalog();
   const { moveWishlistItemToCart } = useShoppingActions();
 
   const products = useMemo(
     () =>
       wishlist.entries
-        .map((e) => ({ entry: e, product: PRODUCT_BY_ID[e.productId] }))
+        .map((e) => ({ entry: e, product: catalogProducts.find((product) => product.id === e.productId) }))
         .filter((x): x is { entry: (typeof wishlist.entries)[number]; product: NonNullable<typeof x.product> } => Boolean(x.product)),
-    [wishlist.entries]
+    [wishlist.entries, catalogProducts]
   );
 
   const addAllToCart = () => {
@@ -61,10 +60,14 @@ export default function WishlistPage() {
       </div>
 
       {products.length === 0 ? (
-        <EmptyState
+        status === "loading" ? (
+          <div className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4" aria-label="Loading wishlist">
+            {Array.from({ length: 4 }).map((_, index) => <div key={index} className="shimmer aspect-[3/4] rounded-2xl" />)}
+          </div>
+        ) : <EmptyState
           icon={Heart}
           title="Nothing saved yet"
-          description="Tap the heart on any product to keep it here for later — seasonal gems sell out fast."
+          description="Save a product from the store catalogue to keep it here for later."
           action={{ label: "Discover produce", href: "/search" }}
           className="mt-8"
         />
@@ -96,14 +99,6 @@ export default function WishlistPage() {
             </motion.div>
           ))}
         </div>
-      )}
-
-      {/* price watch hint */}
-      {products.length > 0 && (
-        <p className="mt-6 rounded-2xl bg-soft px-4 py-3 text-xs leading-relaxed text-graymute">
-          💡 Tip: when a wishlisted item drops in price, you&apos;ll see it under Notifications — for example
-          {" "}<span className="font-semibold text-charcoal">{formatPrice(189)}</span> avocados this week (simulated).
-        </p>
       )}
     </div>
   );

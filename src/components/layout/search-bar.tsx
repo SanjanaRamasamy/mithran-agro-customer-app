@@ -8,23 +8,20 @@ import { useDebounce } from "@/hooks/useDebounce";
 import { useActivity } from "@/contexts/ActivityContext";
 import { useToast } from "@/contexts/NotificationContext";
 import { searchProducts } from "@/hooks/useProductQuery";
-import { PRODUCTS } from "@/data/products";
-import { CATEGORIES } from "@/data/categories";
+import { useCatalog } from "@/contexts/CatalogContext";
 import { SmartImage } from "@/components/ui/smart-image";
 import { formatPrice, titleCase } from "@/utils/format";
 import { getLowestVariantPrice } from "@/utils/product";
 import { cn } from "@/lib/utils";
 
-const POPULAR = ["Alphonso mango", "Tomato", "Vermicompost", "Organic rice", "Silk saree", "Jaggery", "Kurti"];
-
 /** Instant search field with suggestions, recents, and keyboard navigation. */
 export function SearchBar({ className, autoFocusOnMount = false }: { className?: string; autoFocusOnMount?: boolean }) {
   const router = useRouter();
+  const { products, categories, status } = useCatalog();
   const { recentSearches, trackSearch, removeSearch, clearSearchHistory } = useActivity();
   const { toast } = useToast();
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
   const debounced = useDebounce(query, 180);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -43,26 +40,20 @@ export function SearchBar({ className, autoFocusOnMount = false }: { className?:
     return () => document.removeEventListener("mousedown", onDown);
   }, []);
 
-  /* simulate instant-search latency */
-  useEffect(() => {
-    if (!debounced.trim()) {
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
-    const t = window.setTimeout(() => setLoading(false), 350);
-    return () => window.clearTimeout(t);
-  }, [debounced]);
-
   const productHits = useMemo(() => {
     if (!debounced.trim()) return [];
-    return searchProducts(PRODUCTS, debounced).slice(0, 5);
-  }, [debounced]);
+    return searchProducts(products, debounced).slice(0, 5);
+  }, [debounced, products]);
 
   const categoryHits = useMemo(() => {
     if (!debounced.trim()) return [];
-    return CATEGORIES.filter((c) => c.name.toLowerCase().includes(debounced.trim().toLowerCase())).slice(0, 3);
-  }, [debounced]);
+    return categories.filter((category) =>
+      category.active && category.name.toLowerCase().includes(debounced.trim().toLowerCase())
+    ).slice(0, 3);
+  }, [debounced, categories]);
+
+  const popularProducts = products.slice(0, 5);
+  const loading = status === "loading";
 
   const totalSuggestions = productHits.length + categoryHits.length;
 
@@ -86,14 +77,22 @@ export function SearchBar({ className, autoFocusOnMount = false }: { className?:
     if (!open) return;
     if (e.key === "ArrowDown") {
       e.preventDefault();
-      setActiveIndex((i) => Math.min(i + 1, totalSuggestions + (recentSearches.length ? recentSearches.length - 1 : -1)));
+      const itemCount = debounced.trim()
+        ? totalSuggestions + recentSearches.length
+        : popularProducts.length + recentSearches.length;
+      setActiveIndex((i) => Math.min(i + 1, itemCount - 1));
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
       setActiveIndex((i) => Math.max(i - 1, -1));
     } else if (e.key === "Enter") {
       e.preventDefault();
       if (activeIndex >= 0) {
-        if (activeIndex < productHits.length) {
+        if (!debounced.trim() && activeIndex < popularProducts.length) {
+          router.push(`/products/${popularProducts[activeIndex].slug}`);
+          setOpen(false);
+        } else if (!debounced.trim()) {
+          go(recentSearches[activeIndex - popularProducts.length]);
+        } else if (activeIndex < productHits.length) {
           router.push(`/products/${productHits[activeIndex].slug || productHits[activeIndex].id}`);
           setOpen(false);
         } else {
@@ -112,7 +111,7 @@ export function SearchBar({ className, autoFocusOnMount = false }: { className?:
     }
   };
 
-  const showPanel = open && (query.trim().length > 0 || recentSearches.length > 0);
+  const showPanel = open && (query.trim().length > 0 || recentSearches.length > 0 || popularProducts.length > 0);
 
   return (
     <div ref={containerRef} className={cn("relative w-full", className)}>
@@ -138,7 +137,7 @@ export function SearchBar({ className, autoFocusOnMount = false }: { className?:
             ref={inputRef}
             type="search"
             value={query}
-            placeholder="Search mango, tomato, vermicompost, saree…"
+            placeholder="Search the store catalogue…"
             className="h-full min-w-0 flex-1 bg-transparent text-sm text-charcoal outline-none placeholder:text-graymute/70 [&::-webkit-search-cancel-button]:hidden"
             onChange={(e) => {
               setQuery(e.target.value);
@@ -207,7 +206,9 @@ export function SearchBar({ className, autoFocusOnMount = false }: { className?:
                     />
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-sm font-semibold text-charcoal">{p.name}</span>
-                      <span className="block truncate text-xs text-graymute">{p.tagline}</span>
+                      <span className="block truncate text-xs text-graymute">
+                        {p.prestaShop?.categoryName || p.variants[0]?.name || ""}
+                      </span>
                     </span>
                     <span className="shrink-0 text-sm font-bold text-forest-800">
                       {formatPrice(getLowestVariantPrice(p).price)}
@@ -242,7 +243,9 @@ export function SearchBar({ className, autoFocusOnMount = false }: { className?:
                       </span>
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-sm font-semibold text-charcoal">{c.name}</span>
-                        <span className="block text-xs text-graymute">{c.itemCount} products</span>
+                        <span className="block text-xs text-graymute">
+                          {products.filter((product) => product.prestaShop?.categoryAncestorIds.includes(c.id)).length} products
+                        </span>
                       </span>
                     </button>
                   );
@@ -294,25 +297,25 @@ export function SearchBar({ className, autoFocusOnMount = false }: { className?:
               <div className="px-4 py-6 text-center">
                 <p className="text-sm font-semibold text-charcoal">No matches for “{query}”</p>
                 <p className="mt-1 text-xs text-graymute">
-                  Try “mango”, “spinach”, or browse all {PRODUCTS.length} products.
+                  Try another search or browse all {products.length} products.
                 </p>
               </div>
             )}
 
             {/* Popular when empty query */}
-            {!query.trim() && (
+            {!query.trim() && popularProducts.length > 0 && (
               <section aria-label="Popular searches" className="px-3 py-2">
                 <p className="flex items-center gap-1.5 pb-2 text-[10px] font-bold uppercase tracking-widest text-graymute">
-                  <TrendingUp className="size-3.5" aria-hidden /> Trending this week
+                  <TrendingUp className="size-3.5" aria-hidden /> From the store catalogue
                 </p>
                 <div className="flex flex-wrap gap-2">
-                  {POPULAR.map((p) => (
+                  {popularProducts.map((product) => (
                     <button
-                      key={p}
-                      onClick={() => go(p)}
+                      key={product.id}
+                      onClick={() => router.push(`/products/${product.slug}`)}
                       className="rounded-full border border-forest-100 bg-white/70 px-3 py-1.5 text-xs font-medium text-forest-800 transition hover:border-forest-200 hover:bg-forest-50"
                     >
-                      {p}
+                      {product.name}
                     </button>
                   ))}
                 </div>

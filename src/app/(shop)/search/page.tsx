@@ -5,8 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { LayoutGrid, List } from "lucide-react";
-import { PRODUCTS } from "@/data/products";
+import { LayoutGrid, List, RefreshCw } from "lucide-react";
 import { DEFAULT_FILTERS, matchesFilters, searchProducts } from "@/hooks/useProductQuery";
 import type { FilterState, SortOption, ViewMode } from "@/types";
 import { PRICE_BOUNDS, SORT_OPTIONS } from "@/constants";
@@ -16,6 +15,7 @@ import { CategoryTabs } from "@/components/product/category-tabs";
 import { ProductBrowser } from "@/components/product/product-browser";
 import { MobileFiltersTrigger } from "@/components/product/mobile-filters-trigger";
 import { cn } from "@/lib/utils";
+import { useCatalog } from "@/contexts/CatalogContext";
 
 /** Build filter state + sort from the current URL params. */
 function stateFromParams(params: URLSearchParams): { seed: FilterState; sort: SortOption } {
@@ -35,6 +35,7 @@ function stateFromParams(params: URLSearchParams): { seed: FilterState; sort: So
 function SearchPageInner() {
   const router = useRouter();
   const params = useSearchParams();
+  const { products, categories, status, error, reload } = useCatalog();
 
   const term = params.get("q") ?? "";
 
@@ -60,8 +61,8 @@ function SearchPageInner() {
   }, [seed, urlSort]);
 
   const resultCount = useMemo(
-    () => searchProducts(PRODUCTS, term).filter((p) => matchesFilters(p, filters)).length,
-    [term, filters]
+    () => searchProducts(products, term).filter((p) => matchesFilters(p, filters)).length,
+    [products, term, filters]
   );
 
   /* keep filters in sync with URL (shareable links) */
@@ -121,13 +122,17 @@ function SearchPageInner() {
 
   const heading = useMemo(() => {
     if (term) return `Results for “${term}”`;
-    if (activeCategory)
-      return CATEGORY_BY_SLUG[activeCategory]?.name ?? CATEGORY_GROUP_BY_ID[activeCategory]?.name ?? activeCategory;
+    if (activeCategory) {
+      return categories.find((category) => category.slug === activeCategory)?.name
+        ?? CATEGORY_BY_SLUG[activeCategory]?.name
+        ?? CATEGORY_GROUP_BY_ID[activeCategory]?.name
+        ?? activeCategory;
+    }
     if (filters.organicOnly) return "Certified Organic";
     if (filters.seasonalOnly) return "In Season Now";
     if (filters.onSaleOnly) return "Deals & Offers";
     return "All products";
-  }, [term, activeCategory, filters.organicOnly, filters.seasonalOnly, filters.onSaleOnly]);
+  }, [term, activeCategory, categories, filters.organicOnly, filters.seasonalOnly, filters.onSaleOnly]);
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8">
@@ -149,7 +154,7 @@ function SearchPageInner() {
         <div>
           <h1 className="text-2xl font-extrabold tracking-tight text-charcoal sm:text-3xl">{heading}</h1>
           <p className="mt-1 text-sm text-graymute">
-            {resultCount} {resultCount === 1 ? "product" : "products"} from verified sellers
+            {resultCount} {resultCount === 1 ? "product" : "products"} in the store catalogue
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -197,14 +202,32 @@ function SearchPageInner() {
       <div className="flex items-start gap-6">
         <FiltersPanel filters={filters} onChange={handleFilters} resultCount={resultCount} />
         <div className="min-w-0 flex-1">
-          <ProductBrowser
-            products={PRODUCTS}
-            term={term}
-            filters={filters}
-            sort={sort}
-            view={view}
-            onReset={resetAll}
-          />
+          {status === "loading" ? (
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4" aria-label="Loading products">
+              {Array.from({ length: 8 }).map((_, index) => (
+                <div key={index} className="shimmer aspect-[3/4] rounded-2xl" />
+              ))}
+            </div>
+          ) : status === "error" ? (
+            <div role="alert" className="rounded-2xl border border-red-100 bg-white p-6 text-center">
+              <p className="text-sm font-semibold text-charcoal">{error}</p>
+              <button
+                onClick={reload}
+                className="mt-4 inline-flex h-10 items-center gap-2 rounded-xl bg-forest-900 px-4 text-sm font-bold text-white"
+              >
+                <RefreshCw className="size-4" aria-hidden /> Retry
+              </button>
+            </div>
+          ) : (
+            <ProductBrowser
+              products={products}
+              term={term}
+              filters={filters}
+              sort={sort}
+              view={view}
+              onReset={resetAll}
+            />
+          )}
         </div>
       </div>
     </div>

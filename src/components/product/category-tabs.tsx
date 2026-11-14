@@ -5,10 +5,10 @@ import {
   CATEGORY_BY_ID,
   CATEGORY_GROUP_BY_ID,
   PRIMARY_TAB_CATEGORIES,
-  effectiveItemCount,
 } from "@/data/categories";
 import { cn } from "@/lib/utils";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
+import { useCatalog } from "@/contexts/CatalogContext";
 
 interface CategoryTabsProps {
   active: string | null;
@@ -28,17 +28,30 @@ interface TabDef {
  * "All Products" clears every category filter. Counts are live.
  */
 export function CategoryTabs({ active, onChange }: CategoryTabsProps) {
+  const { categories, products } = useCatalog();
   const cats = PRIMARY_TAB_CATEGORIES.flatMap((id): TabDef[] => {
     const cat = CATEGORY_BY_ID[id];
-    if (cat) return [{ slug: cat.slug, name: cat.name, icon: cat.icon, count: effectiveItemCount(cat) }];
+    if (cat) {
+      const liveCategory = categories.find((category) => category.slug === cat.slug);
+      if (!liveCategory) return [];
+      return [{
+        slug: liveCategory.slug,
+        name: liveCategory.name,
+        icon: cat.icon,
+        count: products.filter((product) => product.prestaShop?.categorySlugs.includes(liveCategory.slug)).length,
+      }];
+    }
     const group = CATEGORY_GROUP_BY_ID[id];
     if (group) {
       const Icon = group.icon;
-      const count = group.categoryIds.reduce(
-        (sum, cid) => sum + (CATEGORY_BY_ID[cid] ? effectiveItemCount(CATEGORY_BY_ID[cid]) : 0),
-        0
-      );
-      return [{ slug: group.slug, name: group.name, icon: Icon, count }];
+      const liveCategory = categories.find((category) => category.slug === group.slug);
+      if (!liveCategory) return [];
+      return [{
+        slug: liveCategory.slug,
+        name: liveCategory.name,
+        icon: Icon,
+        count: products.filter((product) => product.prestaShop?.categorySlugs.includes(liveCategory.slug)).length,
+      }];
     }
     return [];
   });

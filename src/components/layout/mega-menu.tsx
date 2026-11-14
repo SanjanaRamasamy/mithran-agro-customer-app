@@ -3,26 +3,14 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ChevronDown, BadgePercent } from "lucide-react";
+import { ChevronDown, Grid3X3 } from "lucide-react";
 import { CATEGORY_BY_ID } from "@/data/categories";
-import { PRODUCTS } from "@/data/products";
+import { useCatalog } from "@/contexts/CatalogContext";
 import { SmartImage } from "@/components/ui/smart-image";
-import { getLowestVariantPrice } from "@/utils/product";
 import { formatPrice } from "@/utils/format";
 import { cn } from "@/lib/utils";
-
-const WOMEN_CHILDREN = CATEGORY_BY_ID["women"]?.childIds ?? [];
-
-function useFeaturedWomen() {
-  return useMemo(() => {
-    const ids = new Set(["women", ...WOMEN_CHILDREN]);
-    return PRODUCTS.filter((p) => ids.has(p.categoryId))
-      .sort((a, b) => b.rating - a.rating)
-      .slice(0, 3);
-  }, []);
-}
 
 /**
  * Desktop primary navigation — exactly the Mithren Agro business lines.
@@ -30,6 +18,7 @@ function useFeaturedWomen() {
  * picks and a promo card; every other item is a direct link.
  */
 export function MegaMenu() {
+  const { categories, products } = useCatalog();
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
@@ -58,7 +47,14 @@ export function MegaMenu() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  const featuredWomen = useFeaturedWomen();
+  const womenCategory = categories.find((category) => category.slug === "women");
+  const womenChildren = womenCategory
+    ? categories.filter((category) => category.active && category.parentId === womenCategory.id)
+    : [];
+  const womenProducts = womenCategory
+    ? products.filter((product) => product.prestaShop?.categoryAncestorIds.includes(womenCategory.id)).slice(0, 3)
+    : [];
+  const hasDiscounts = products.some((product) => product.variants.some((variant) => variant.mrp > variant.price));
 
   return (
     <nav aria-label="Primary" className="hidden border-t border-forest-50/60 lg:block" onMouseLeave={scheduleClose}>
@@ -110,14 +106,10 @@ export function MegaMenu() {
             />
           </button>
 
-          <NavLink href="/search?onsale=1" label="Offers" active={params.get("onsale") === "1"} />
+          {hasDiscounts && <NavLink href="/search?onsale=1" label="Offers" active={params.get("onsale") === "1"} />}
           <NavLink href="/farms" label="Our Farms" active={pathname === "/farms"} />
           <NavLink href="/contact" label="Contact" active={pathname === "/contact"} />
 
-          <span className="ml-auto hidden shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full bg-lime-soft px-3 py-1 text-xs font-bold text-lime-deep 2xl:inline-flex">
-            <BadgePercent className="size-3.5" aria-hidden />
-            Farm-fresh deals daily
-          </span>
         </div>
 
         {/* ------------------------- mega panel ------------------------- */}
@@ -135,10 +127,9 @@ export function MegaMenu() {
                 <div className="flex gap-6 p-6">
                   {/* subcategories */}
                   <div className="grid flex-1 grid-cols-3 gap-x-6 gap-y-1">
-                    {WOMEN_CHILDREN.map((childId, i) => {
-                      const cat = CATEGORY_BY_ID[childId];
-                      if (!cat) return null;
-                      const Icon = cat.icon;
+                    {womenChildren.map((cat, i) => {
+                      const Icon = CATEGORY_BY_ID[cat.slug]?.icon ?? Grid3X3;
+                      const count = products.filter((product) => product.prestaShop?.categoryAncestorIds.includes(cat.id)).length;
                       return (
                         <motion.div
                           key={cat.id}
@@ -159,7 +150,7 @@ export function MegaMenu() {
                                 {cat.name}
                               </span>
                               <span className="block text-[10px] text-graymute">
-                                {cat.itemCount} styles
+                                {count} products
                               </span>
                             </span>
                           </Link>
@@ -168,12 +159,12 @@ export function MegaMenu() {
                     })}
                   </div>
 
-                  {/* featured products */}
+                  {/* store products */}
                   <div className="hidden w-48 shrink-0 flex-col gap-2 xl:flex">
                     <p className="text-[10px] font-bold uppercase tracking-widest text-graymute">
-                      Top rated
+                      Women&apos;s products
                     </p>
-                    {featuredWomen.map((p) => (
+                    {womenProducts.map((p) => (
                       <Link
                         key={p.id}
                         href={`/products/${p.slug}`}
@@ -193,7 +184,7 @@ export function MegaMenu() {
                             {p.name}
                           </span>
                           <span className="text-[11px] font-semibold text-forest-800">
-                            {formatPrice(getLowestVariantPrice(p).price)}
+                            {formatPrice(p.variants[0].price)}
                           </span>
                         </span>
                       </Link>

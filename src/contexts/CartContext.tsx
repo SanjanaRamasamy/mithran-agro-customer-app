@@ -1,8 +1,8 @@
 "use client";
 
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import type { AppliedCoupon, CartItem, CartLine, CartTotals } from "@/types";
-import { PRODUCT_BY_ID } from "@/data/products";
+import type { AppliedCoupon, CartItem, CartLine, CartTotals, Product } from "@/types";
+import { useCatalog } from "@/contexts/CatalogContext";
 import { COUPONS } from "@/data/offers";
 import { makeCartItemId } from "@/utils/product";
 import { readStorage, writeStorage } from "@/utils/storage";
@@ -48,9 +48,12 @@ interface CartContextValue {
 
 const CartContext = createContext<CartContextValue | null>(null);
 
-function resolveLines(items: CartItem[]): CartLine[] {
+function resolveLines(
+  items: CartItem[],
+  productsById: Record<string, Product>
+): CartLine[] {
   return items.flatMap((item) => {
-    const product = PRODUCT_BY_ID[item.productId];
+    const product = productsById[item.productId];
     if (!product) return [];
     const variant = product.variants.find((v) => v.id === item.variantId);
     if (!variant) return [];
@@ -88,6 +91,11 @@ function computeTotals(
 }
 
 export function CartProvider({ children }: { children: React.ReactNode }) {
+  const { products } = useCatalog();
+  const productsById = useMemo(
+    () => Object.fromEntries(products.map((product) => [product.id, product])),
+    [products]
+  );
   const [items, setItems] = useState<CartItem[]>([]);
   const [savedForLater, setSavedForLater] = useState<CartItem[]>([]);
   const [couponCode, setCouponCode] = useState<string | null>(null);
@@ -111,8 +119,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     if (hydrated) writeStorage(COUPON_KEY, couponCode);
   }, [couponCode, hydrated]);
 
-  const lines = useMemo(() => resolveLines(items), [items]);
-  const savedLines = useMemo(() => resolveLines(savedForLater), [savedForLater]);
+  const lines = useMemo(() => resolveLines(items, productsById), [items, productsById]);
+  const savedLines = useMemo(() => resolveLines(savedForLater, productsById), [savedForLater, productsById]);
 
   const coupon = useMemo<AppliedCoupon | null>(() => {
     if (!couponCode) return null;
@@ -135,27 +143,36 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
   const addItem = useCallback(
     (productId: string, variantId: string, quantity = 1): AddResult => {
-      const product = PRODUCT_BY_ID[productId];
+      const product = productsById[productId];
       const variant = product?.variants.find((v) => v.id === variantId);
       if (!product || !variant) return { ok: false, message: "Product unavailable" };
+      if (!product.prestaShop?.active || !product.prestaShop.availableForOrder) {
+        return { ok: false, message: `${product.name} is unavailable for order` };
+      }
       if (!variant.inStock) return { ok: false, message: `${product.name} is out of stock` };
 
       const id = makeCartItemId(productId, variantId);
+      const existing = items.find((item) => item.id === id);
+      const requestedQuantity = Math.max(product.prestaShop.minimumQuantity, quantity);
+      const nextQuantity = requestedQuantity + (existing?.quantity ?? 0);
+      if (nextQuantity > product.prestaShop.quantity) {
+        return { ok: false, message: `Only ${product.prestaShop.quantity} ${product.prestaShop.unit || "units"} available` };
+      }
+
       setItems((prev) => {
-        const existing = prev.find((i) => i.id === id);
         if (existing) {
           return prev.map((i) =>
-            i.id === id ? { ...i, quantity: Math.min(10, i.quantity + quantity) } : i
+            i.id === id ? { ...i, quantity: nextQuantity } : i
           );
         }
         return [
           ...prev,
-          { id, productId, variantId, quantity, addedAt: new Date().toISOString() },
+          { id, productId, variantId, quantity: requestedQuantity, addedAt: new Date().toISOString() },
         ];
       });
       return { ok: true, message: `${product.name} added to basket` };
     },
-    []
+    [items, productsById]
   );
 
   const updateQuantity = useCallback((id: string, quantity: number) => {
@@ -163,10 +180,17 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       setItems((prev) => prev.filter((i) => i.id !== id));
       return;
     }
-    setItems((prev) =>
-      prev.map((i) => (i.id === id ? { ...i, quantity: Math.min(10, quantity) } : i))
-    );
-  }, []);
+    const item = items.find((candidate) => candidate.id === id);
+    const product = item ? productsById[item.productId] : undefined;
+    const variant = product?.variants.find((candidate) => candidate.id === item?.variantId);
+    if (!item || !product || !variant) return;
+    const minimum = product.prestaShop?.minimumQuantity ?? 1;
+    const maximum = variant.stockCount ?? 10;
+    if (maximum < minimum) return;
+    setItems((prev) => prev.map((candidate) =>
+      candidate.id === id ? { ...candidate, quantity: Math.max(minimum, Math.min(maximum, quantity)) } : candidate
+    ));
+  }, [items, productsById]);
 
   const removeItem = useCallback((id: string) => {
     setItems((prev) => prev.filter((i) => i.id !== id));
@@ -186,12 +210,23 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const moveToCart = useCallback((id: string) => {
-    setSavedForLater((prev) => {
-      const item = prev.find((i) => i.id === id);
-      if (item) setItems((c) => (c.some((x) => x.id === id) ? c : [...c, item]));
-      return prev.filter((i) => i.id !== id);
-    });
-  }, []);
+    const item = savedForLater.find((candidate) => candidate.id === id);
+    const product = item ? productsById[item.productId] : undefined;
+    const variant = item && product?.variants.find((candidate) => candidate.id === item.variantId);
+    if (!item || !product || !variant?.inStock || !product.prestaShop?.availableForOrder) return;
+
+    const minimum = product.prestaShop.minimumQuantity;
+    const quantity = Math.max(minimum, item.quantity);
+    const existing = items.find((candidate) => candidate.id === id);
+    const nextQuantity = quantity + (existing?.quantity ?? 0);
+    if (nextQuantity > product.prestaShop.quantity) return;
+
+    setItems((current) => existing
+      ? current.map((candidate) => candidate.id === id ? { ...candidate, quantity: nextQuantity } : candidate)
+      : [...current, { ...item, quantity }]
+    );
+    setSavedForLater((current) => current.filter((candidate) => candidate.id !== id));
+  }, [items, productsById, savedForLater]);
 
   const removeSaved = useCallback((id: string) => {
     setSavedForLater((prev) => prev.filter((i) => i.id !== id));
@@ -216,7 +251,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
   const removeCoupon = useCallback(() => setCouponCode(null), []);
 
-  const itemCount = useMemo(() => items.reduce((s, i) => s + i.quantity, 0), [items]);
+  const itemCount = useMemo(() => lines.reduce((sum, line) => sum + line.quantity, 0), [lines]);
 
   const value = useMemo<CartContextValue>(
     () => ({

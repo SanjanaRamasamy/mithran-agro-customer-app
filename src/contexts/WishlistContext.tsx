@@ -3,7 +3,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import type { WishlistEntry } from "@/types";
 import { readStorage, writeStorage } from "@/utils/storage";
-import { PRODUCT_BY_ID } from "@/data/products";
+import { useCatalog } from "@/contexts/CatalogContext";
 import { getBestVariant } from "@/utils/product";
 
 const WISHLIST_KEY = "verdant.wishlist.v1";
@@ -21,6 +21,11 @@ interface WishlistContextValue {
 const WishlistContext = createContext<WishlistContextValue | null>(null);
 
 export function WishlistProvider({ children }: { children: React.ReactNode }) {
+  const { products } = useCatalog();
+  const productsById = useMemo(
+    () => Object.fromEntries(products.map((product) => [product.id, product])),
+    [products]
+  );
   const [entries, setEntries] = useState<WishlistEntry[]>([]);
   const [hydrated, setHydrated] = useState(false);
 
@@ -40,7 +45,7 @@ export function WishlistProvider({ children }: { children: React.ReactNode }) {
 
   const toggle = useCallback(
     (productId: string): { added: boolean; message: string } => {
-      const product = PRODUCT_BY_ID[productId];
+      const product = productsById[productId];
       const name = product?.name ?? "Product";
       let added = false;
       setEntries((prev) => {
@@ -55,7 +60,7 @@ export function WishlistProvider({ children }: { children: React.ReactNode }) {
         message: added ? `${name} saved to wishlist` : `${name} removed from wishlist`,
       };
     },
-    []
+    [productsById]
   );
 
   const remove = useCallback((productId: string) => {
@@ -67,14 +72,14 @@ export function WishlistProvider({ children }: { children: React.ReactNode }) {
   /** Wishlist → cart uses the best available variant. */
   const moveToCart = useCallback(
     (productId: string): { ok: boolean; message: string } => {
-      const product = PRODUCT_BY_ID[productId];
+      const product = productsById[productId];
       if (!product) return { ok: false, message: "Product unavailable" };
       const variant = getBestVariant(product);
       if (!variant.inStock) return { ok: false, message: `${product.name} is out of stock` };
       // actual cart insertion is performed by the caller who has both contexts
       return { ok: true, message: `${product.name} (${variant.name}) moved to basket`, };
     },
-    []
+    [productsById]
   );
 
   const value = useMemo<WishlistContextValue>(
