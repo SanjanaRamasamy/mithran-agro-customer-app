@@ -10,6 +10,7 @@ import { useCatalog } from "@/contexts/CatalogContext";
 import { ProductCard } from "@/components/product/product-card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { timeAgo } from "@/utils/format";
+import { ProtectedRoute } from "@/components/auth/protected-route";
 
 export default function WishlistPage() {
   const wishlist = useWishlist();
@@ -31,6 +32,7 @@ export default function WishlistPage() {
   };
 
   return (
+    <ProtectedRoute>
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
       <nav aria-label="Breadcrumb" className="text-xs text-graymute">
         <ol className="flex items-center gap-1.5">
@@ -101,5 +103,6 @@ export default function WishlistPage() {
         </div>
       )}
     </div>
+    </ProtectedRoute>
   );
 }

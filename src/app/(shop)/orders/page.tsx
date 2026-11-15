@@ -10,6 +10,7 @@ import { OrderCard } from "@/components/orders/order-card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { cn } from "@/lib/utils";
 import type { OrderStatus } from "@/types";
+import { ProtectedRoute } from "@/components/auth/protected-route";
 
 const TABS: { key: string; label: string; statuses?: OrderStatus[] }[] = [
   { key: "all", label: "All orders" },
@@ -20,7 +21,7 @@ const TABS: { key: string; label: string; statuses?: OrderStatus[] }[] = [
 
 function OrdersInner() {
   const { orders } = useOrders();
-  const { isAuthenticated, user, login } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const [tab, setTab] = useState("all");
 
   const filtered = useMemo(() => {
@@ -35,8 +36,8 @@ function OrdersInner() {
       <EmptyState
         icon={UserRound}
         title="Sign in to see your orders"
-        description="Your order history lives in your account. This demo keeps everything local — no real account needed."
-        action={{ label: "Continue as demo user", onClick: () => login("aarav.sharma@example.com") }}
+        description="Sign in to view orders associated with your demo account."
+        action={{ label: "Sign in", href: "/login?redirect=%2Forders" }}
         secondaryAction={{ label: "Start shopping", href: "/search" }}
         className="mt-6"
       />
@@ -92,19 +93,21 @@ function OrdersInner() {
 
 export default function OrdersPage() {
   return (
-    <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
-      <nav aria-label="Breadcrumb" className="text-xs text-graymute">
-        <ol className="flex items-center gap-1.5">
-          <li><Link href="/" className="hover:text-forest-800">Home</Link></li>
-          <li aria-hidden>/</li>
-          <li className="font-semibold text-charcoal">My orders</li>
-        </ol>
-      </nav>
-      <h1 className="mt-2 text-2xl font-extrabold tracking-tight text-charcoal sm:text-3xl">My orders</h1>
-      <p className="mt-1 text-sm text-graymute">
-        Track deliveries, download invoices, reorder favourites — all simulated with local data.
-      </p>
-      <OrdersInner />
-    </div>
+    <ProtectedRoute>
+      <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
+        <nav aria-label="Breadcrumb" className="text-xs text-graymute">
+          <ol className="flex items-center gap-1.5">
+            <li><Link href="/" className="hover:text-forest-800">Home</Link></li>
+            <li aria-hidden>/</li>
+            <li className="font-semibold text-charcoal">My orders</li>
+          </ol>
+        </nav>
+        <h1 className="mt-2 text-2xl font-extrabold tracking-tight text-charcoal sm:text-3xl">My orders</h1>
+        <p className="mt-1 text-sm text-graymute">
+          Track deliveries, download invoices, reorder favourites — all simulated with local data.
+        </p>
+        <OrdersInner />
+      </div>
+    </ProtectedRoute>
   );
 }

@@ -4,6 +4,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Home, Grid3X3, Heart, ShoppingBasket, Package } from "lucide-react";
 import { useCart } from "@/contexts/CartContext";
+import { useAuth } from "@/contexts/AuthContext";
+import { useAuthPrompt } from "@/contexts/AuthPromptContext";
 import { cn } from "@/lib/utils";
 
 const TABS = [
@@ -18,6 +20,8 @@ const TABS = [
 export function MobileTabBar() {
   const pathname = usePathname();
   const { itemCount } = useCart();
+  const { isAuthenticated } = useAuth();
+  const { showAuthPrompt } = useAuthPrompt();
 
   if (pathname.startsWith("/checkout")) return null;
 
@@ -32,6 +36,12 @@ export function MobileTabBar() {
           <Link
             key={href}
             href={href}
+            onClick={(event) => {
+              if (href === "/wishlist" && !isAuthenticated) {
+                event.preventDefault();
+                showAuthPrompt({ kind: "wishlist", returnTo: "/wishlist" });
+              }
+            }}
             aria-label={label}
             aria-current={active ? "page" : undefined}
             className={cn(

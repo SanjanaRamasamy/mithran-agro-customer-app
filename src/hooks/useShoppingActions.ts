@@ -6,6 +6,9 @@ import { useWishlist } from "@/contexts/WishlistContext";
 import { useToast } from "@/contexts/NotificationContext";
 import { useCatalog } from "@/contexts/CatalogContext";
 import { getBestVariant } from "@/utils/product";
+import { useAuth } from "@/contexts/AuthContext";
+import { useAuthPrompt } from "@/contexts/AuthPromptContext";
+import { usePathname } from "next/navigation";
 
 /**
  * One-click commerce actions shared by cards, drawers and detail pages.
@@ -16,6 +19,9 @@ export function useShoppingActions() {
   const { products } = useCatalog();
   const wishlist = useWishlist();
   const { toast } = useToast();
+  const { isAuthenticated } = useAuth();
+  const { showAuthPrompt } = useAuthPrompt();
+  const pathname = usePathname();
 
   const addToCart = useCallback(
     (productId: string, variantId?: string, quantity = 1, opts?: { silent?: boolean }) => {
@@ -40,14 +46,19 @@ export function useShoppingActions() {
 
   const toggleWishlist = useCallback(
     (productId: string) => {
+      if (!isAuthenticated) {
+        showAuthPrompt({ kind: "wishlist", returnTo: pathname, productId });
+        return false;
+      }
       const result = wishlist.toggle(productId);
       toast({
         kind: result.added ? "success" : "info",
         title: result.message,
         description: result.added ? "Simulated — wishlist is local to this demo." : undefined,
       });
+      return true;
     },
-    [wishlist, toast]
+    [wishlist, toast, isAuthenticated, pathname, showAuthPrompt]
   );
 
   const moveWishlistItemToCart = useCallback(

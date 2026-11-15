@@ -5,6 +5,7 @@ import { ThemeProvider } from "@/contexts/ThemeContext";
 import { ToastProvider, NotificationProvider } from "@/contexts/NotificationContext";
 import { CatalogProvider } from "@/contexts/CatalogContext";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { AuthPromptProvider } from "@/contexts/AuthPromptContext";
 import { CartProvider } from "@/contexts/CartContext";
 import { WishlistProvider } from "@/contexts/WishlistContext";
 import { OrdersProvider } from "@/contexts/OrdersContext";
@@ -12,7 +13,7 @@ import { ActivityProvider } from "@/contexts/ActivityContext";
 
 /**
  * Single composition point for every client context.
- * Order matters: Theme → Toast → Catalog → Notification → Auth → Cart → Wishlist → Orders → Activity.
+ * Auth prompts and customer data depend on Auth; catalog-dependent shopping contexts follow Catalog.
  */
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
@@ -20,15 +21,17 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <ToastProvider>
         <CatalogProvider>
           <AuthProvider>
-            <NotificationProvider>
-              <CartProvider>
-                <WishlistProvider>
-                  <OrdersProvider>
-                    <ActivityProvider>{children}</ActivityProvider>
-                  </OrdersProvider>
-                </WishlistProvider>
-              </CartProvider>
-            </NotificationProvider>
+            <AuthPromptProvider>
+              <NotificationProvider>
+                <CartProvider>
+                  <WishlistProvider>
+                    <OrdersProvider>
+                      <ActivityProvider>{children}</ActivityProvider>
+                    </OrdersProvider>
+                  </WishlistProvider>
+                </CartProvider>
+              </NotificationProvider>
+            </AuthPromptProvider>
           </AuthProvider>
         </CatalogProvider>
       </ToastProvider>

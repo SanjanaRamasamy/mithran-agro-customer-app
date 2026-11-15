@@ -52,9 +52,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = useCallback((email: string, name?: string) => {
     const base = { ...MOCK_USER };
+    const normalizedEmail = email.trim().toLowerCase() || base.email;
     setUser({
       ...base,
-      email: email || base.email,
+      id: normalizedEmail === base.email ? base.id : `demo:${normalizedEmail}`,
+      email: normalizedEmail,
       name: name?.trim() ? name.trim() : base.name,
     });
   }, []);

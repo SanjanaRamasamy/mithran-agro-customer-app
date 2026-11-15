@@ -193,7 +193,11 @@ export function OrderSummary({
         {ctaHref ? (
           <a
             href={ctaHref}
+            onClick={(event) => {
+              if (disabled) event.preventDefault();
+            }}
             aria-disabled={disabled}
+            tabIndex={disabled ? -1 : undefined}
             className={cn(
               "mt-4 flex h-12 w-full items-center justify-center gap-2 rounded-2xl text-sm font-bold shadow-soft transition active:scale-[0.98]",
               disabled

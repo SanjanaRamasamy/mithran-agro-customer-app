@@ -4,6 +4,8 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useS
 import type { Order } from "@/types";
 import { MOCK_ORDERS } from "@/data/orders";
 import { readStorage, writeStorage } from "@/utils/storage";
+import { useAuth } from "@/contexts/AuthContext";
+import { canPlaceOrderForCustomer, getCustomerOrders } from "@/utils/customer-access";
 
 const ORDERS_KEY = "verdant.orders.v1";
 
@@ -19,8 +21,13 @@ interface OrdersContextValue {
 const OrdersContext = createContext<OrdersContextValue | null>(null);
 
 export function OrdersProvider({ children }: { children: React.ReactNode }) {
+  const { user, isAuthenticated } = useAuth();
   const [orders, setOrders] = useState<Order[]>(MOCK_ORDERS);
   const [hydrated, setHydrated] = useState(false);
+  const customerOrders = useMemo(
+    () => isAuthenticated && user ? getCustomerOrders(orders, user.id) : [],
+    [orders, user, isAuthenticated]
+  );
 
   useEffect(() => {
     const stored = readStorage<Order[] | null>(ORDERS_KEY, null);
@@ -32,16 +39,20 @@ export function OrdersProvider({ children }: { children: React.ReactNode }) {
     if (hydrated) writeStorage(ORDERS_KEY, orders);
   }, [orders, hydrated]);
 
-  const getOrder = useCallback((id: string) => orders.find((o) => o.id === id), [orders]);
+  const getOrder = useCallback(
+    (id: string) => customerOrders.find((order) => order.id === id),
+    [customerOrders]
+  );
 
   const placeOrder = useCallback((order: Order) => {
+    if (!canPlaceOrderForCustomer(isAuthenticated, user?.id, order.userId)) return;
     setOrders((prev) => [order, ...prev]);
-  }, []);
+  }, [isAuthenticated, user]);
 
   const cancelOrder = useCallback((id: string) => {
     setOrders((prev) =>
       prev.map((o) =>
-        o.id === id
+        o.id === id && o.userId === user?.id
           ? {
               ...o,
               status: "cancelled",
@@ -62,12 +73,12 @@ export function OrdersProvider({ children }: { children: React.ReactNode }) {
           : o
       )
     );
-  }, []);
+  }, [user]);
 
   const requestReturn = useCallback((id: string) => {
     setOrders((prev) =>
       prev.map((o) =>
-        o.id === id
+        o.id === id && o.userId === user?.id
           ? {
               ...o,
               status: "return-requested",
@@ -87,11 +98,11 @@ export function OrdersProvider({ children }: { children: React.ReactNode }) {
           : o
       )
     );
-  }, []);
+  }, [user]);
 
   const reorder = useCallback(
     (id: string) => {
-      const order = orders.find((o) => o.id === id);
+      const order = customerOrders.find((o) => o.id === id);
       if (!order) return { ok: false, message: "Order not found", outOfStock: [] };
       const outOfStock: string[] = [];
       for (const item of order.items) {
@@ -105,12 +116,12 @@ export function OrdersProvider({ children }: { children: React.ReactNode }) {
         outOfStock,
       };
     },
-    [orders]
+    [customerOrders]
   );
 
   const value = useMemo(
-    () => ({ orders, getOrder, placeOrder, cancelOrder, requestReturn, reorder }),
-    [orders, getOrder, placeOrder, cancelOrder, requestReturn, reorder]
+    () => ({ orders: customerOrders, getOrder, placeOrder, cancelOrder, requestReturn, reorder }),
+    [customerOrders, getOrder, placeOrder, cancelOrder, requestReturn, reorder]
   );
 
   return <OrdersContext.Provider value={value}>{children}</OrdersContext.Provider>;

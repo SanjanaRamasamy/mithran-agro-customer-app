@@ -6,7 +6,6 @@ import { ArrowRight, Heart, ShoppingBasket, Trash2 } from "lucide-react";
 import type { CartLine } from "@/types";
 import { useCart } from "@/contexts/CartContext";
 import { useShoppingActions } from "@/hooks/useShoppingActions";
-import { useWishlist } from "@/contexts/WishlistContext";
 import { SmartImage } from "@/components/ui/smart-image";
 import { Price } from "@/components/ui/price";
 import { QuantityStepper } from "@/components/ui/quantity-stepper";
@@ -144,7 +143,7 @@ export function CartBySeller({ lines }: { lines: CartLine[] }) {
 /** Saved-for-later list. */
 export function SavedForLater() {
   const { savedLines, moveToCart, removeSaved } = useCart();
-  const wishlist = useWishlist();
+  const { toggleWishlist } = useShoppingActions();
 
   if (savedLines.length === 0) return null;
 
@@ -186,9 +185,7 @@ export function SavedForLater() {
               <div className="flex justify-center gap-1">
                 <button
                   onClick={() => {
-                    const res = wishlist.toggle(line.product.id);
-                    void res;
-                    removeSaved(line.id);
+                    if (toggleWishlist(line.product.id)) removeSaved(line.id);
                   }}
                   className="rounded-lg p-1.5 text-graymute transition hover:bg-red-50 hover:text-red-500"
                   aria-label="Move to wishlist"

@@ -230,7 +230,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const requestedItems: { productId: string; quantity: number; expectedPrice: number }[] = [];
+    const requestedItems = new Map<string, { productId: string; quantity: number; expectedPrice: number }>();
     for (const item of body.items) {
       if (!isRecord(item)) {
         return NextResponse.json({ success: false, message: "Invalid basket item." }, { status: 400 });
@@ -242,12 +242,25 @@ export async function POST(request: Request) {
         !/^\d+$/.test(productId) ||
         !quantity ||
         quantity < 1 ||
+        !Number.isSafeInteger(quantity) ||
         expectedPrice === undefined ||
         expectedPrice < 0
       ) {
         return NextResponse.json({ success: false, message: "Invalid basket item." }, { status: 400 });
       }
-      requestedItems.push({ productId, quantity, expectedPrice });
+      const existing = requestedItems.get(productId);
+      if (existing && Math.abs(existing.expectedPrice - expectedPrice) > 0.000001) {
+        return NextResponse.json({ success: false, message: "Invalid basket item." }, { status: 400 });
+      }
+      const combinedQuantity = quantity + (existing?.quantity ?? 0);
+      if (!Number.isSafeInteger(combinedQuantity)) {
+        return NextResponse.json({ success: false, message: "Invalid basket quantity." }, { status: 400 });
+      }
+      requestedItems.set(productId, {
+        productId,
+        quantity: combinedQuantity,
+        expectedPrice,
+      });
     }
 
     const catalogResponse = await GET();
@@ -264,7 +277,7 @@ export async function POST(request: Request) {
       );
     }
 
-    for (const item of requestedItems) {
+    for (const item of requestedItems.values()) {
       const product = catalogPayload.products.find(
         (candidate) => isRecord(candidate) && String(candidate.id) === item.productId
       );

@@ -8,6 +8,7 @@ import { ArrowRight, Download, Leaf, Package, Sprout, Truck } from "lucide-react
 import { useOrders } from "@/contexts/OrdersContext";
 import { useToast } from "@/contexts/NotificationContext";
 import { formatPrice, formatDate } from "@/utils/format";
+import { ProtectedRoute } from "@/components/auth/protected-route";
 
 function ConfirmationInner() {
   const params = useSearchParams();
@@ -54,10 +55,10 @@ function ConfirmationInner() {
           <Leaf className="size-8" aria-hidden />
         </motion.span>
         <h1 className="mt-5 text-2xl font-extrabold tracking-tight sm:text-3xl">
-          Order confirmed — thank you!
+          Demo order complete — simulated
         </h1>
         <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-forest-50/90">
-          Your order <strong>{order.id}</strong> is confirmed. Farmers have been notified and your produce will be harvested for the slot below.
+          Demo order <strong>{order.id}</strong> is saved locally. No payment was processed and no order was created in PrestaShop.
         </p>
         <div className="mt-5 inline-flex flex-wrap items-center justify-center gap-x-6 gap-y-2 rounded-2xl bg-white/10 px-5 py-3 text-sm backdrop-blur-sm">
           <span className="flex items-center gap-2">
@@ -125,7 +126,7 @@ function ConfirmationInner() {
           ))}
         </ul>
         <div className="mt-3 flex items-center justify-between border-t border-forest-50 pt-3 text-sm">
-          <span className="font-bold text-charcoal">Paid via {order.paymentMethod}</span>
+          <span className="font-bold text-charcoal">Simulated payment · {order.paymentMethod}</span>
           <span className="font-extrabold text-charcoal">{formatPrice(order.totals.total)}</span>
         </div>
         <p className="mt-3 text-center text-[11px] text-graymute">
@@ -138,16 +139,18 @@ function ConfirmationInner() {
 
 export default function OrderConfirmationPage() {
   return (
-    <div className="px-4 py-10 sm:py-14">
-      <Suspense
-        fallback={
-          <div className="mx-auto max-w-2xl">
-            <div className="shimmer h-64 rounded-3xl" />
-          </div>
-        }
-      >
-        <ConfirmationInner />
-      </Suspense>
-    </div>
+    <ProtectedRoute>
+      <div className="px-4 py-10 sm:py-14">
+        <Suspense
+          fallback={
+            <div className="mx-auto max-w-2xl">
+              <div className="shimmer h-64 rounded-3xl" />
+            </div>
+          }
+        >
+          <ConfirmationInner />
+        </Suspense>
+      </div>
+    </ProtectedRoute>
   );
 }
