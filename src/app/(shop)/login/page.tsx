@@ -9,13 +9,20 @@ import { Eye, EyeOff, Leaf, Lock, Mail, ShieldCheck } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/contexts/NotificationContext";
 import { cn } from "@/lib/utils";
+import { useCatalog } from "@/contexts/CatalogContext";
+import { useWishlist } from "@/contexts/WishlistContext";
+import { safeReturnPath } from "@/utils/safe-redirect";
+import { requestedWishlistAddition } from "@/utils/customer-access";
 
 function LoginInner() {
   const router = useRouter();
   const params = useSearchParams();
-  const redirect = params.get("redirect") ?? "/";
+  const redirect = safeReturnPath(params.get("redirect"));
   const { login, loginWithGoogle } = useAuth();
+  const { products } = useCatalog();
+  const wishlist = useWishlist();
   const { toast } = useToast();
+  const requestedWishlistProduct = params.get("wishlistProductId");
 
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [email, setEmail] = useState("aarav.sharma@example.com");
@@ -25,6 +32,18 @@ function LoginInner() {
   const [errors, setErrors] = useState<{ email?: string; password?: string; name?: string }>({});
   const [forgotOpen, setForgotOpen] = useState(false);
   const [forgotEmail, setForgotEmail] = useState("");
+
+  const finishSignIn = () => {
+    const wishlistProductId = requestedWishlistAddition(
+      requestedWishlistProduct,
+      products.map((product) => product.id),
+      wishlist.entries.map((entry) => entry.productId)
+    );
+    if (wishlistProductId) {
+      wishlist.toggle(wishlistProductId);
+    }
+    router.replace(redirect);
+  };
 
   const validate = () => {
     const errs: typeof errors = {};
@@ -43,19 +62,19 @@ function LoginInner() {
       title: mode === "signup" ? `Welcome to Mithren Agro, ${name.split(" ")[0]}! 🌱` : "Welcome back! 🌱",
       description: "Simulated session — credentials are never sent anywhere.",
     });
-    router.push(redirect);
+    finishSignIn();
   };
 
   const googleLogin = () => {
     loginWithGoogle();
     toast({ title: "Signed in with Google (simulated)", description: "No real OAuth happened — this is a demo." });
-    router.push(redirect);
+    finishSignIn();
   };
 
   const demoLogin = () => {
     login("aarav.sharma@example.com");
     toast({ title: "Exploring as demo user", description: "Aarav's mock profile, orders and addresses are loaded." });
-    router.push(redirect);
+    finishSignIn();
   };
 
   const inputCls =

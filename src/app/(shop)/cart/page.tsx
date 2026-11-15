@@ -5,10 +5,24 @@ import { motion } from "framer-motion";
 import { CartBySeller, EmptyCartState, SavedForLater } from "@/components/cart/cart-lines";
 import { OrderSummary } from "@/components/cart/order-summary";
 import { useCart } from "@/contexts/CartContext";
+import { useAuth } from "@/contexts/AuthContext";
+import { useAuthPrompt } from "@/contexts/AuthPromptContext";
+import { useRouter } from "next/navigation";
 
 export default function CartPage() {
   const { lines, itemCount } = useCart();
+  const { isAuthenticated, isLoading } = useAuth();
+  const { showAuthPrompt } = useAuthPrompt();
+  const router = useRouter();
   const hasUnavailableItems = lines.some((line) => !line.variant.inStock);
+  const proceedToCheckout = () => {
+    if (isLoading) return;
+    if (!isAuthenticated) {
+      showAuthPrompt({ kind: "checkout", returnTo: "/checkout" });
+      return;
+    }
+    router.push("/checkout");
+  };
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
@@ -41,7 +55,7 @@ export default function CartPage() {
           )}
         </div>
         <aside aria-label="Order summary" className="lg:sticky lg:top-40 lg:self-start">
-          <OrderSummary ctaHref="/checkout" disabled={lines.length === 0 || hasUnavailableItems} sticky={false} />
+          <OrderSummary onCta={proceedToCheckout} disabled={lines.length === 0 || hasUnavailableItems || isLoading} sticky={false} />
         </aside>
       </motion.div>
     </div>

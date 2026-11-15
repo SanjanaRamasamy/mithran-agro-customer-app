@@ -4,11 +4,12 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Bell, Heart, LogOut, Moon, Package, Settings, ShoppingBasket, Sparkles, Sun, User } from "lucide-react";
+import { Bell, Headset, Heart, LogOut, Moon, Package, Settings, ShoppingBasket, Sparkles, Star, Sun, User } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCart } from "@/contexts/CartContext";
 import { useNotifications } from "@/contexts/NotificationContext";
 import { useTheme } from "@/contexts/ThemeContext";
+import { useAuthPrompt } from "@/contexts/AuthPromptContext";
 import { timeAgo } from "@/utils/format";
 import { cn } from "@/lib/utils";
 
@@ -138,6 +139,8 @@ export function AccountMenu() {
             {[
               { label: "My Profile", href: "/account", icon: User },
               { label: "My Orders", href: "/orders", icon: Package },
+              { label: "My Reviews", href: "/account/reviews", icon: Star },
+              { label: "Support", href: "/account/support", icon: Headset },
               { label: "Settings & Privacy", href: "/account?tab=settings", icon: Settings },
             ].map(({ label, href, icon: Icon }) => (
               <li key={label}>
@@ -185,6 +188,21 @@ export function ThemeToggle() {
 
 /** Wishlist icon-link with live count. */
 export function WishlistLink() {
+  const { isAuthenticated } = useAuth();
+  const { showAuthPrompt } = useAuthPrompt();
+  if (!isAuthenticated) {
+    return (
+      <button
+        type="button"
+        onClick={() => showAuthPrompt({ kind: "wishlist", returnTo: "/wishlist" })}
+        aria-label="Sign in to view wishlist"
+        className="flex size-10 items-center justify-center rounded-xl text-charcoal transition hover:bg-forest-50 active:scale-90"
+      >
+        <Heart className="size-[18px]" aria-hidden />
+      </button>
+    );
+  }
+
   return (
     <Link
       href="/wishlist"

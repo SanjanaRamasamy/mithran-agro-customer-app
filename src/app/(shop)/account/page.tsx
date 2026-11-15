@@ -26,6 +26,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Switch } from "@/components/ui/switch";
 import { timeAgo, formatDate } from "@/utils/format";
 import { cn } from "@/lib/utils";
+import { ProtectedRoute } from "@/components/auth/protected-route";
 
 const TABS = [
   { key: "profile", label: "Profile", icon: User },
@@ -42,7 +43,7 @@ function AccountInner() {
   const params = useSearchParams();
   const initialTab = params.get("tab") ?? "profile";
   const [tab, setTab] = useState<string>(TABS.some((t) => t.key === initialTab) ? initialTab : "profile");
-  const { user, isAuthenticated, isLoading, login, logout, updateProfile, addresses, deleteAddress, setDefaultAddress, paymentMethods } = useAuth();
+  const { user, isAuthenticated, isLoading, logout, updateProfile, addresses, deleteAddress, setDefaultAddress, paymentMethods } = useAuth();
   const { notifications, markRead, markAllRead, remove } = useNotifications();
   const { theme, toggleTheme } = useTheme();
   const { toast } = useToast();
@@ -66,8 +67,7 @@ function AccountInner() {
         icon={User}
         title="Sign in to manage your account"
         description="Profile, addresses, saved payments and settings live in your account. Everything is stored locally in this demo."
-        action={{ label: "Continue as demo user", onClick: () => login("aarav.sharma@example.com") }}
-        secondaryAction={{ label: "Go to login page", href: "/login?redirect=/account" }}
+        action={{ label: "Sign in", href: "/login?redirect=%2Faccount" }}
         className="mt-8"
       />
     );
@@ -355,10 +355,12 @@ function AccountInner() {
 
 export default function AccountPage() {
   return (
-    <div className="px-4 py-8 sm:px-6">
-      <Suspense fallback={<div className="mx-auto max-w-4xl"><div className="shimmer h-32 rounded-3xl" /></div>}>
-        <AccountInner />
-      </Suspense>
-    </div>
+    <ProtectedRoute>
+      <div className="px-4 py-8 sm:px-6">
+        <Suspense fallback={<div className="mx-auto max-w-4xl"><div className="shimmer h-32 rounded-3xl" /></div>}>
+          <AccountInner />
+        </Suspense>
+      </div>
+    </ProtectedRoute>
   );
 }

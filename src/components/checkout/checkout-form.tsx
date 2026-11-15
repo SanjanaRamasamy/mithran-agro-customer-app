@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import {
@@ -25,6 +25,7 @@ import { PAYMENT_METHODS } from "@/constants";
 import { orderNumber, formatPrice } from "@/utils/format";
 import { cn } from "@/lib/utils";
 import type { Address, DeliverySlot, Order, OrderItem } from "@/types";
+import { canPlaceOrderForCustomer } from "@/utils/customer-access";
 
 function StepHeader({ n, title, hint }: { n: number; title: string; hint?: string }) {
   return (
@@ -103,6 +104,7 @@ export function CheckoutForm() {
   const [slotId, setSlotId] = useState<string>(DELIVERY_SLOTS[2]?.id ?? DELIVERY_SLOTS[0].id);
   const [payment, setPayment] = useState<string>("upi");
   const [placing, setPlacing] = useState(false);
+  const submissionInProgress = useRef(false);
   const [contactName, setContactName] = useState(user?.name ?? "");
   const [contactPhone, setContactPhone] = useState(user?.phone ?? "");
   const [contactErrors, setContactErrors] = useState<{ name?: string; phone?: string }>({});
@@ -149,6 +151,12 @@ export function CheckoutForm() {
   };
 
   const placeOrderNow = async () => {
+    if (submissionInProgress.current) return;
+    if (!isAuthenticated || !user || !canPlaceOrderForCustomer(isAuthenticated, user.id)) {
+      toast({ kind: "error", title: "Sign in is required to place an order." });
+      router.replace("/login?redirect=%2Fcheckout");
+      return;
+    }
     if (!validateContact()) return;
     if (lines.length === 0) return;
     if (hasUnavailableItems) {
@@ -162,6 +170,7 @@ export function CheckoutForm() {
       return;
     }
 
+    submissionInProgress.current = true;
     setPlacing(true);
     try {
       const response = await fetch("/api/prestashop/products", {
@@ -184,20 +193,9 @@ export function CheckoutForm() {
       if (!response.ok || typeof payload !== "object" || payload === null || !("success" in payload) || payload.success !== true) {
         toast({ kind: "error", title: validationMessage });
         reload();
-        setPlacing(false);
         return;
       }
-    } catch (error) {
-      toast({
-        kind: "error",
-        title: error instanceof Error ? error.message : "Unable to verify your basket.",
-      });
-      setPlacing(false);
-      return;
-    }
-
-    /* simulate payment + order creation latency */
-    window.setTimeout(() => {
+      await new Promise<void>((resolve) => window.setTimeout(resolve, 1400));
       const id = orderNumber(Math.floor(100000 + Math.random() * 899999));
       const items: OrderItem[] = lines.map((l, i) => ({
         id: `oi-${id}-${i}`,
@@ -218,7 +216,7 @@ export function CheckoutForm() {
 
       const order: Order = {
         id,
-        userId: user?.id ?? "guest",
+        userId: user.id,
         items,
         status: "confirmed",
         placedAt: new Date().toISOString(),
@@ -279,8 +277,15 @@ export function CheckoutForm() {
       placeOrder(order);
       clearCart();
       router.push(`/order-confirmation?id=${id}`);
+    } catch (error) {
+      toast({
+        kind: "error",
+        title: error instanceof Error ? error.message : "Unable to verify your basket.",
+      });
+    } finally {
+      submissionInProgress.current = false;
       setPlacing(false);
-    }, 1400);
+    }
   };
 
   if (lines.length === 0) {
@@ -518,7 +523,7 @@ export function CheckoutForm() {
       {/* summary column */}
       <aside aria-label="Order summary" className="lg:sticky lg:top-40 lg:self-start">
         <div className="space-y-4">
-          <OrderSummary ctaLabel="Place order" onCta={placeOrderNow} disabled={placing} sticky={false} />
+          <OrderSummary ctaLabel="Place demo order" onCta={placeOrderNow} disabled={placing} sticky={false} />
           {slotFee > 0 && (
             <p className="rounded-xl bg-soft px-3.5 py-2.5 text-xs text-graymute">
               Includes {formatPrice(slotFee)} express slot fee for {selectedSlot?.day} {selectedSlot?.window}.
@@ -549,7 +554,7 @@ export function CheckoutForm() {
           disabled={placing}
           className="inline-flex h-11 items-center gap-1.5 rounded-xl bg-forest-900 px-5 text-sm font-bold text-white transition active:scale-95 disabled:opacity-60"
         >
-          {placing ? "Placing…" : "Place order"}
+          {placing ? "Simulating…" : "Place demo order"}
           {!placing && <ChevronRight className="size-4" aria-hidden />}
         </button>
       </div>
