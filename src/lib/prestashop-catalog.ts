@@ -31,6 +31,18 @@ function numberValue(value: unknown): number | undefined {
   return undefined;
 }
 
+function identifier(value: unknown, allowZero = false): string | null {
+  const parsed = numberValue(value);
+  if (
+    parsed === undefined ||
+    !Number.isSafeInteger(parsed) ||
+    parsed < (allowZero ? 0 : 1)
+  ) {
+    return null;
+  }
+  return String(parsed);
+}
+
 function flag(value: unknown): boolean {
   return value === true || value === 1 || value === "1";
 }
@@ -90,10 +102,179 @@ function associatedIds(value: unknown): string[] {
   });
 }
 
+function stockAvailableLinkIds(value: unknown): string[] | null {
+  let collection = value;
+  if (isRecord(collection) && isRecord(collection.prestashop)) {
+    collection = collection.prestashop;
+  }
+  if (isRecord(collection) && "stock_availables" in collection) {
+    collection = collection.stock_availables;
+  }
+
+  let links: unknown;
+  if (Array.isArray(collection)) {
+    links = collection;
+  } else if (isRecord(collection)) {
+    links = "stock_available" in collection
+      ? collection.stock_available
+      : collection;
+  } else {
+    return null;
+  }
+  const records = Array.isArray(links) ? links : [links];
+  if (records.length === 0 || !records.every(isRecord)) return null;
+
+  const ids = records.map((record) => identifier(record.id));
+  if (ids.some((id) => id === null)) return null;
+  return ids.filter((id): id is string => id !== null);
+}
+
 function imageIds(record: JsonRecord, associations: JsonRecord): string[] {
   const ids = [text(record.id_default_image), ...associatedIds(associations.images)]
     .filter(Boolean);
   return [...new Set(ids)];
+}
+
+export function getPrestaShopStockAvailableIds(products: unknown[]): string[] {
+  return [...new Set(products.flatMap((value) => {
+    if (!isRecord(value) || !isRecord(value.associations)) {
+      throw new Error("Product is missing stock availability associations.");
+    }
+
+    const stockIds = stockAvailableLinkIds(value.associations.stock_availables);
+    if (!stockIds || stockIds.length === 0) {
+      throw new Error("Product has no linked stock availability records.");
+    }
+    return stockIds;
+  }))];
+}
+
+export interface PrestaShopStockAvailable {
+  id: string;
+  productId: string | null;
+  shopId: string | null;
+  shopGroupId: string | null;
+  shopGroupValid: boolean;
+  quantity: number | undefined;
+}
+
+export function isPrestaShopQuantityAvailable(
+  quantity: number | undefined,
+  minimum: number | undefined,
+  stock: number | undefined
+): boolean {
+  return (
+    quantity !== undefined &&
+    minimum !== undefined &&
+    stock !== undefined &&
+    Number.isSafeInteger(quantity) &&
+    Number.isSafeInteger(minimum) &&
+    Number.isSafeInteger(stock) &&
+    quantity >= 1 &&
+    minimum >= 1 &&
+    stock >= 0 &&
+    quantity >= minimum &&
+    quantity <= stock
+  );
+}
+
+export function parsePrestaShopStockAvailables(
+  value: unknown
+): PrestaShopStockAvailable[] {
+  return rows(value, "stock_availables").flatMap((record) => {
+    const id = identifier(record.id);
+    if (!id) return [];
+    const shopGroupId = record.id_shop_group === undefined
+      ? null
+      : identifier(record.id_shop_group, true);
+    return [{
+      id,
+      productId: identifier(record.id_product),
+      shopId: identifier(record.id_shop, true),
+      shopGroupId,
+      shopGroupValid: record.id_shop_group === undefined || shopGroupId !== null,
+      quantity: numberValue(record.quantity),
+    }];
+  });
+}
+
+export function applyPrestaShopStockAvailables(
+  products: unknown[],
+  stockAvailables: PrestaShopStockAvailable[]
+): unknown[] {
+  const stockById = new Map<string, PrestaShopStockAvailable>();
+  for (const stock of stockAvailables) {
+    const previous = stockById.get(stock.id);
+    if (
+      previous &&
+      (
+        previous.productId !== stock.productId ||
+        previous.shopId !== stock.shopId ||
+        previous.shopGroupId !== stock.shopGroupId ||
+        previous.shopGroupValid !== stock.shopGroupValid ||
+        previous.quantity !== stock.quantity
+      )
+    ) {
+      throw new Error("PrestaShop returned conflicting data for a stock record.");
+    }
+    stockById.set(stock.id, stock);
+  }
+
+  return products.map((product) => {
+    if (!isRecord(product) || !isRecord(product.associations)) {
+      throw new Error("Product is missing stock availability associations.");
+    }
+
+    const productId = identifier(product.id);
+    const shopId = identifier(product.id_shop_default);
+    if (!productId || !shopId) {
+      throw new Error("Product is missing its product or default shop identifier.");
+    }
+
+    const linkedIds = stockAvailableLinkIds(product.associations.stock_availables);
+    if (!linkedIds || linkedIds.length === 0) {
+      throw new Error("Product has no linked stock availability records.");
+    }
+    const stockIds = [...new Set(linkedIds)];
+    if (stockIds.length === 0) {
+      throw new Error("Product has no linked stock availability records.");
+    }
+    if (stockIds.some((id) => !stockById.has(id))) {
+      throw new Error("PrestaShop returned incomplete stock availability data.");
+    }
+
+    const linkedStocks = stockIds.map((id) => stockById.get(id)!);
+    for (const stock of linkedStocks) {
+      if (
+        stock.productId !== productId ||
+        stock.shopId !== shopId ||
+        !stock.shopGroupValid ||
+        (stock.shopGroupId !== null && stock.shopGroupId !== "0")
+      ) {
+        throw new Error("PrestaShop stock record does not match the product shop context.");
+      }
+      if (
+        stock.quantity === undefined ||
+        !Number.isSafeInteger(stock.quantity) ||
+        stock.quantity < 0
+      ) {
+        throw new Error("PrestaShop stock record has an invalid quantity.");
+      }
+    }
+
+    // This catalog exposes one sellable variant per product, so distinct attribute
+    // stock rows are aggregated only after validating their shared product/shop scope.
+    const quantity = linkedStocks.reduce((total, stock) => {
+      if (stock.quantity === undefined) {
+        throw new Error("PrestaShop stock record has an invalid quantity.");
+      }
+      return total + stock.quantity;
+    }, 0);
+    if (!Number.isSafeInteger(quantity)) {
+      throw new Error("PrestaShop stock total exceeds the supported quantity range.");
+    }
+    return { ...product, quantity };
+  });
 }
 
 export function mapPrestaShopProduct(
@@ -186,7 +367,7 @@ export function mapPrestaShopProduct(
       categoryNames: [...categoryNames],
       categoryName: primaryCategory?.name ?? "",
       imageIds: productImageIds,
-      stockAvailableIds: associatedIds(associations.stock_availables),
+      stockAvailableIds: stockAvailableLinkIds(associations.stock_availables) ?? [],
       minimumQuantity,
       quantity,
       unitPrice: numberValue(value.unit_price),
