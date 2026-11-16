@@ -1,4 +1,10 @@
 import { NextResponse } from "next/server";
+import {
+  applyPrestaShopStockAvailables,
+  getPrestaShopStockAvailableIds,
+  isPrestaShopQuantityAvailable,
+  parsePrestaShopStockAvailables,
+} from "@/lib/prestashop-catalog";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -180,6 +186,85 @@ export async function GET() {
       );
     }
 
+    const stockAvailableIds = getPrestaShopStockAvailableIds(products);
+    let catalogProducts = products;
+    if (products.length > 0) {
+      const stockEndpoint = new URL("api/stock_availables", normalizedBaseUrl);
+      stockEndpoint.searchParams.set("output_format", "JSON");
+      stockEndpoint.searchParams.set("display", "full");
+      stockEndpoint.searchParams.set("filter[id]", `[${stockAvailableIds.join("|")}]`);
+
+      const stockResponse = await fetch(stockEndpoint.toString(), {
+        method: "GET",
+        headers: {
+          Authorization: `Basic ${authorization}`,
+          Accept: "application/json",
+        },
+        cache: "no-store",
+      });
+
+      if (!stockResponse.ok) {
+        console.error("PrestaShop stock availability request failed:", {
+          status: stockResponse.status,
+          contentType: stockResponse.headers.get("content-type") ?? "",
+        });
+        return NextResponse.json(
+          {
+            success: false,
+            message: "Unable to verify product inventory with PrestaShop.",
+            products: [],
+          },
+          { status: 502 }
+        );
+      }
+
+      let stockData: unknown;
+      try {
+        stockData = JSON.parse(await stockResponse.text());
+      } catch {
+        console.error("PrestaShop returned an invalid stock availability response.");
+        return NextResponse.json(
+          {
+            success: false,
+            message: "PrestaShop returned invalid product inventory data.",
+            products: [],
+          },
+          { status: 502 }
+        );
+      }
+
+      const stockAvailables = parsePrestaShopStockAvailables(stockData);
+      const stockIdsFound = new Set(stockAvailables.map(({ id }) => id));
+      if (stockAvailableIds.some((id) => !stockIdsFound.has(id))) {
+        console.error("PrestaShop stock availability response was incomplete:", {
+          requestedCount: stockAvailableIds.length,
+          returnedCount: stockAvailables.length,
+        });
+        return NextResponse.json(
+          {
+            success: false,
+            message: "PrestaShop returned incomplete product inventory data.",
+            products: [],
+          },
+          { status: 502 }
+        );
+      }
+
+      try {
+        catalogProducts = applyPrestaShopStockAvailables(products, stockAvailables);
+      } catch {
+        console.error("PrestaShop stock associations could not be verified.");
+        return NextResponse.json(
+          {
+            success: false,
+            message: "Unable to verify product inventory with PrestaShop.",
+            products: [],
+          },
+          { status: 502 }
+        );
+      }
+    }
+
     const hasProducts = products.length > 0;
 
     return NextResponse.json({
@@ -188,8 +273,8 @@ export async function GET() {
       message: hasProducts
         ? "Products retrieved successfully."
         : "PrestaShop connected successfully. No products are available yet.",
-      total: products.length,
-      products,
+      total: catalogProducts.length,
+      products: catalogProducts,
     });
   } catch (error) {
     console.error("Products API unexpected error:", {
@@ -199,7 +284,7 @@ export async function GET() {
     return NextResponse.json(
       {
         success: false,
-        message: "Unable to connect to PrestaShop or retrieve products.",
+        message: "Unable to verify product inventory with PrestaShop.",
         products: [],
       },
       { status: 502 }
@@ -301,7 +386,7 @@ export async function POST(request: Request) {
           { status: 409 }
         );
       }
-      if (item.quantity < minimum || item.quantity > stock) {
+      if (!isPrestaShopQuantityAvailable(item.quantity, minimum, stock)) {
         return NextResponse.json(
           { success: false, message: "A basket quantity no longer meets the minimum or available stock." },
           { status: 409 }
