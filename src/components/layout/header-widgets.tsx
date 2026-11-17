@@ -10,7 +10,7 @@ import { useCart } from "@/contexts/CartContext";
 import { useNotifications } from "@/contexts/NotificationContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useAuthPrompt } from "@/contexts/AuthPromptContext";
-import { timeAgo } from "@/utils/format";
+import { notificationTimeLabel } from "@/utils/format";
 import { cn } from "@/lib/utils";
 
 /** Bell with unread badge + glass dropdown of notifications. */
@@ -18,6 +18,7 @@ export function NotificationsBell() {
   const { notifications, unreadCount, markRead, markAllRead } = useNotifications();
   const { user } = useAuth();
   const router = useRouter();
+  const [mounted, setMounted] = useState(false);
   const [now, setNow] = useState<number | null>(null);
 
   const latest = notifications.slice(0, 5);
@@ -25,6 +26,7 @@ export function NotificationsBell() {
   useEffect(() => {
     let interval: number | undefined;
     const timeout = window.setTimeout(() => {
+      setMounted(true);
       setNow(Date.now());
       interval = window.setInterval(() => setNow(Date.now()), 60_000);
     }, 0);
@@ -78,7 +80,7 @@ export function NotificationsBell() {
                   </span>
                   <span className="mt-0.5 line-clamp-2 block text-xs leading-relaxed text-graymute">{n.body}</span>
                   <time dateTime={n.timestamp} className="mt-1 block text-[11px] text-graymute/80">
-                    {now === null ? "—" : timeAgo(n.timestamp, now)}
+                    {notificationTimeLabel(n.timestamp, mounted ? now : null)}
                   </time>
                 </button>
               </li>

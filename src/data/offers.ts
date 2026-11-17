@@ -1,6 +1,5 @@
 import type { AppNotification, Coupon, Offer } from "@/types";
 
-const hoursAgo = (h: number) => new Date(Date.now() - h * 3600_000).toISOString();
 const daysAhead = (d: number) => new Date(Date.now() + d * 86_400_000).toISOString();
 
 export const MOCK_NOTIFICATIONS: AppNotification[] = [
@@ -9,7 +8,7 @@ export const MOCK_NOTIFICATIONS: AppNotification[] = [
     type: "delivery",
     title: "Dhruv is 12 minutes away",
     body: "Your order MAG-2026-010423 will arrive between 6–9 PM today. Keep the doorbell on!",
-    timestamp: hoursAgo(1),
+    timestamp: "2026-11-17T04:45:00.000Z",
     read: false,
     actionLabel: "Track order",
     actionHref: "/orders/MAG-2026-010423",
@@ -19,7 +18,7 @@ export const MOCK_NOTIFICATIONS: AppNotification[] = [
     type: "offer",
     title: "Mango season is live 🥭",
     body: "Ratnagiri Alphonso boxes are open for pre-order. FRESH20 gets you 20% off today.",
-    timestamp: hoursAgo(5),
+    timestamp: "2026-11-17T00:45:00.000Z",
     read: false,
     actionLabel: "Shop mangoes",
     actionHref: "/category/fruits",
@@ -29,7 +28,7 @@ export const MOCK_NOTIFICATIONS: AppNotification[] = [
     type: "price",
     title: "Price drop on your wishlist",
     body: "Kanchi Cotton Saree dropped from ₹1,599 to ₹1,150. Grab the loom-fresh batch before it sells out.",
-    timestamp: hoursAgo(9),
+    timestamp: "2026-11-16T20:45:00.000Z",
     read: false,
     actionLabel: "View wishlist",
     actionHref: "/wishlist",
@@ -39,7 +38,7 @@ export const MOCK_NOTIFICATIONS: AppNotification[] = [
     type: "order",
     title: "Order delivered",
     body: "MAG-2026-010380 was delivered yesterday morning. How were the Gala apples?",
-    timestamp: hoursAgo(22),
+    timestamp: "2026-11-16T07:45:00.000Z",
     read: true,
     actionLabel: "Rate produce",
     actionHref: "/orders/MAG-2026-010380",
@@ -49,7 +48,7 @@ export const MOCK_NOTIFICATIONS: AppNotification[] = [
     type: "system",
     title: "New at Sunrise Valley",
     body: "The women-led collective added hill-grown Ooty carrots and Snow Crown cauliflower this week.",
-    timestamp: hoursAgo(30),
+    timestamp: "2026-11-15T23:45:00.000Z",
     read: true,
     actionLabel: "Explore fresh vegetables",
     actionHref: "/category/vegetables",
@@ -59,7 +58,7 @@ export const MOCK_NOTIFICATIONS: AppNotification[] = [
     type: "offer",
     title: "Wallet credited ₹50",
     body: "You earned ₹50 Mithren Agro Wallet cashback from your last organic order.",
-    timestamp: hoursAgo(46),
+    timestamp: "2026-11-15T07:45:00.000Z",
     read: true,
   },
 ];

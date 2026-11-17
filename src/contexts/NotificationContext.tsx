@@ -6,6 +6,7 @@ import { CheckCircle2, Info, TriangleAlert, X, XCircle } from "lucide-react";
 import type { AppNotification } from "@/types";
 import { MOCK_NOTIFICATIONS } from "@/data/offers";
 import { readStorage, writeStorage } from "@/utils/storage";
+import { getInitialNotifications, loadPersistedNotifications } from "@/utils/notification-state";
 
 /* ================= Toasts (ephemeral, animated) ================= */
 
@@ -120,13 +121,17 @@ interface NotificationContextValue {
 
 const NotificationContext = createContext<NotificationContextValue | null>(null);
 const NTF_KEY = "verdant.notifications.v1";
+const INITIAL_NOTIFICATIONS = getInitialNotifications(MOCK_NOTIFICATIONS);
 
 export function NotificationProvider({ children }: { children: React.ReactNode }) {
-  const [notifications, setNotifications] = useState<AppNotification[]>(MOCK_NOTIFICATIONS);
+  const [notifications, setNotifications] = useState<AppNotification[]>(() => INITIAL_NOTIFICATIONS);
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
-    setNotifications(readStorage<AppNotification[]>(NTF_KEY, MOCK_NOTIFICATIONS));
+    setNotifications(loadPersistedNotifications(
+      () => readStorage<unknown>(NTF_KEY, INITIAL_NOTIFICATIONS),
+      INITIAL_NOTIFICATIONS,
+    ));
     setHydrated(true);
   }, []);
 

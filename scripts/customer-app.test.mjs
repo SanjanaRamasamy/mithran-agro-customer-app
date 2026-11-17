@@ -13,6 +13,13 @@ import {
   mapPrestaShopProduct,
   parsePrestaShopStockAvailables,
 } from "../src/lib/prestashop-catalog.ts";
+import { sanitizeProductDescription } from "../src/lib/product-description.ts";
+import { MOCK_NOTIFICATIONS } from "../src/data/offers.ts";
+import { notificationTimeLabel } from "../src/utils/format.ts";
+import {
+  getInitialNotifications,
+  loadPersistedNotifications,
+} from "../src/utils/notification-state.ts";
 
 test("accepts a safe same-origin customer route with its query", () => {
   assert.equal(
@@ -234,4 +241,135 @@ test("rejects invalid or missing stock data for checkout", () => {
   assert.throws(() => enrichFixture(product, [
     stockFixture({ id: 907, productId: 48, quantity: "not-a-number" }),
   ]));
+});
+
+test("keeps plain-text product descriptions as text", () => {
+  assert.equal(
+    sanitizeProductDescription("Fresh mangoes & guavas"),
+    "Fresh mangoes &amp; guavas",
+  );
+});
+
+test("preserves legitimate paragraph formatting", () => {
+  assert.equal(
+    sanitizeProductDescription("<p>Fresh produce</p><p>Carefully harvested.</p>"),
+    "<p>Fresh produce</p><p>Carefully harvested.</p>",
+  );
+});
+
+test("preserves headings and bold text", () => {
+  assert.equal(
+    sanitizeProductDescription("<h2>Nutrition</h2><p><b>Rich</b> in vitamins.</p>"),
+    "<h2>Nutrition</h2><p><b>Rich</b> in vitamins.</p>",
+  );
+});
+
+test("preserves ordered and unordered lists", () => {
+  assert.equal(
+    sanitizeProductDescription("<ul><li>One</li></ul><ol><li>Two</li></ol>"),
+    "<ul><li>One</li></ul><ol><li>Two</li></ol>",
+  );
+});
+
+test("preserves mixed text and formatted markup", () => {
+  assert.equal(
+    sanitizeProductDescription("A sweet fruit. <p>Grown locally.</p> Best enjoyed fresh."),
+    "A sweet fruit. <p>Grown locally.</p> Best enjoyed fresh.",
+  );
+});
+
+test("removes AI citation references and unwraps citation-wrapped product copy", () => {
+  assert.equal(
+    sanitizeProductDescription(
+      '<div class="model-response-message-content"><p>Dragon fruit is nutritious <span class="citation-27">[27]</span> and refreshing.</p><sup class="citation-26">26</sup></div>',
+    ),
+    "<p>Dragon fruit is nutritious  and refreshing.</p>",
+  );
+});
+
+test("removes source-label metadata without removing surrounding product copy", () => {
+  assert.equal(
+    sanitizeProductDescription(
+      '<p>High in fiber.</p><div class="source-inline-chip-container"><span class="source-label-container">Healthline</span></div><p>Enjoy chilled.</p>',
+    ),
+    "<p>High in fiber.</p><p>Enjoy chilled.</p>",
+  );
+});
+
+test("removes unsafe markup, event attributes, and unsafe links", () => {
+  const sanitized = sanitizeProductDescription(
+    '<p onclick="alert(1)">Safe <strong>content</strong></p><script>alert(1)</script><iframe src="https://attacker.example"></iframe><a href="javascript:alert(1)">unsafe link</a><img src=x onerror=alert(1)>',
+  );
+  assert.equal(sanitized, "<p>Safe <strong>content</strong></p>unsafe link");
+  assert.doesNotMatch(sanitized, /script|iframe|javascript:|onclick|onerror|attacker/);
+});
+
+test("returns empty output for missing or empty descriptions", () => {
+  assert.equal(sanitizeProductDescription(undefined), "");
+  assert.equal(sanitizeProductDescription(null), "");
+  assert.equal(sanitizeProductDescription("   "), "");
+});
+
+test("notification initial time markup uses the same fixed timestamp and fallback on server and client", () => {
+  const [firstNotification] = MOCK_NOTIFICATIONS;
+  assert.equal(firstNotification.id, "ntf-1");
+  assert.deepEqual(
+    MOCK_NOTIFICATIONS.map((notification) => notification.timestamp),
+    [
+      "2026-11-17T04:45:00.000Z",
+      "2026-11-17T00:45:00.000Z",
+      "2026-11-16T20:45:00.000Z",
+      "2026-11-16T07:45:00.000Z",
+      "2026-11-15T23:45:00.000Z",
+      "2026-11-15T07:45:00.000Z",
+    ],
+  );
+  assert.equal(notificationTimeLabel(firstNotification.timestamp, null), "—");
+  assert.equal(notificationTimeLabel(firstNotification.timestamp, null), "—");
+});
+
+test("notification relative time is calculated only after a mounted clock is available", () => {
+  const timestamp = "2026-11-17T04:45:00.000Z";
+  const mountedNow = Date.parse("2026-11-17T05:45:00.000Z");
+  assert.equal(notificationTimeLabel(timestamp, null), "—");
+  assert.equal(notificationTimeLabel(timestamp, mountedNow), "1h ago");
+});
+
+test("notification timestamps that are missing or invalid render safely", () => {
+  assert.equal(notificationTimeLabel(undefined, Date.now()), "—");
+  assert.equal(notificationTimeLabel("", Date.now()), "—");
+  assert.equal(notificationTimeLabel("not-a-date", Date.now()), "—");
+});
+
+test("notification initial state is the deterministic shared server and client snapshot", () => {
+  const serverSnapshot = getInitialNotifications(MOCK_NOTIFICATIONS);
+  const clientSnapshot = getInitialNotifications(MOCK_NOTIFICATIONS);
+  assert.deepEqual(serverSnapshot, MOCK_NOTIFICATIONS);
+  assert.deepEqual(clientSnapshot, serverSnapshot);
+  assert.deepEqual(
+    clientSnapshot.map(({ id, timestamp, read }) => ({ id, timestamp, read })),
+    MOCK_NOTIFICATIONS.map(({ id, timestamp, read }) => ({ id, timestamp, read })),
+  );
+});
+
+test("localStorage cannot affect initial notifications and persisted state loads on demand", () => {
+  const persisted = [
+    { ...MOCK_NOTIFICATIONS[0], id: "stored-notification", read: true },
+  ];
+  const initial = getInitialNotifications(MOCK_NOTIFICATIONS);
+  let storageReads = 0;
+  assert.deepEqual(initial, MOCK_NOTIFICATIONS);
+  assert.equal(storageReads, 0);
+
+  const loaded = loadPersistedNotifications(() => {
+    storageReads += 1;
+    return persisted;
+  }, initial);
+  assert.equal(storageReads, 1);
+  assert.deepEqual(loaded, persisted);
+});
+
+test("malformed persisted notification data falls back to the initial snapshot", () => {
+  const initial = getInitialNotifications(MOCK_NOTIFICATIONS);
+  assert.deepEqual(loadPersistedNotifications(() => ({ timestamp: "not-an-array" }), initial), initial);
 });

@@ -31,6 +31,7 @@ import { SmartImage } from "@/components/ui/smart-image";
 import { reviewsForProduct, ratingBreakdown } from "@/data/reviews";
 import { formatPrice, formatDate, calcDiscountPercent } from "@/utils/format";
 import { cn } from "@/lib/utils";
+import { sanitizeProductDescription } from "@/lib/product-description";
 import { FAQS } from "@/data/banners";
 import { useCatalog } from "@/contexts/CatalogContext";
 
@@ -240,12 +241,18 @@ function InfoPanels({ product }: { product: Product }) {
   const hasProductDetails = Boolean(
     product.description || rows.length || product.organicDetails || product.nutrition
   );
+  const descriptionHtml = sanitizeProductDescription(product.description);
 
   return (
     <div className="grid gap-5 lg:grid-cols-2">
       {hasProductDetails && <section aria-label="Product details" className="rounded-2xl border border-forest-50 bg-white p-5 shadow-soft">
         <h2 className="text-base font-bold text-charcoal">{aboutTitle}</h2>
-        <p className="mt-2 text-sm leading-relaxed text-graymute">{product.description}</p>
+        {descriptionHtml && (
+          <div
+            className="mt-2 space-y-3 text-sm leading-relaxed text-graymute [&_h1]:text-lg [&_h1]:font-bold [&_h2]:text-base [&_h2]:font-bold [&_h3]:font-semibold [&_h4]:font-semibold [&_h5]:font-semibold [&_h6]:font-semibold [&_li]:pl-1 [&_ol]:list-decimal [&_ol]:pl-5 [&_strong]:font-semibold [&_ul]:list-disc [&_ul]:pl-5"
+            dangerouslySetInnerHTML={{ __html: descriptionHtml }}
+          />
+        )}
 
         <dl className="mt-4 divide-y divide-forest-50">
           {rows.map((r) => (
