@@ -35,7 +35,7 @@ function OrdersInner() {
       <EmptyState
         icon={UserRound}
         title="Sign in to see your orders"
-        description="Sign in to view orders associated with your PrestaShop customer account."
+        description="Sign in to view orders associated with your Mithran Agro customer account."
         action={{ label: "Sign in", href: "/login?redirect=%2Forders" }}
         secondaryAction={{ label: "Start shopping", href: "/search" }}
         className="mt-6"
@@ -109,7 +109,7 @@ export default function OrdersPage() {
         </nav>
         <h1 className="mt-2 text-2xl font-extrabold tracking-tight text-charcoal sm:text-3xl">My orders</h1>
         <p className="mt-1 text-sm text-graymute">
-          View orders placed through your PrestaShop customer account.
+          View orders placed through your Mithran Agro customer account.
         </p>
         <OrdersInner />
       </div>

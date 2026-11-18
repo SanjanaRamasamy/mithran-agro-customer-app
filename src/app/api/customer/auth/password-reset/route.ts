@@ -25,7 +25,7 @@ export async function POST(request: Request) {
     return Response.json(
       {
         success: true,
-        message: "If an active account uses that email, PrestaShop will send its password reset link.",
+        message: "If an active account uses that email, we will send a password reset link.",
       },
       { headers: { "Cache-Control": "no-store" } },
     );

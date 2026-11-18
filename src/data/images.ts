@@ -179,8 +179,7 @@ export const IMG: Record<string, string[]> = {
     "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/c7cbbedebc78.jpg",
   ],
   "cat-fashion": [
-    "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/13a1a9d2de15.png",
-    "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/e3011fd6e915.jpg",
+    "/images/women-apparels-banner.jpg",
   ],
   "p-guava": [
     "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/21b917e530cc.jpg",

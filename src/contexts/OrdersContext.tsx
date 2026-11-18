@@ -61,7 +61,7 @@ export function OrdersProvider({ children }: { children: React.ReactNode }) {
           throw new Error(
             isOrdersPayload(payload) && typeof payload.message === "string"
               ? payload.message
-              : "Unable to load your PrestaShop orders.",
+              : "Unable to load your Mithran Agro orders.",
           );
         }
         const parsed = parseCustomerOrders(payload.orders);

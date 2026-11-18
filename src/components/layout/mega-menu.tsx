@@ -1,63 +1,22 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
-import { useRouter, usePathname, useSearchParams } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
-import { ChevronDown, Grid3X3 } from "lucide-react";
-import { CATEGORY_BY_ID } from "@/data/categories";
+import { usePathname, useSearchParams } from "next/navigation";
 import { useCatalog } from "@/contexts/CatalogContext";
-import { SmartImage } from "@/components/ui/smart-image";
-import { formatPrice } from "@/utils/format";
 import { cn } from "@/lib/utils";
 
 /**
- * Desktop primary navigation — exactly the Mithren Agro business lines.
- * "Women's Apparels" opens a mega menu with its subcategories, top-rated
- * picks and a promo card; every other item is a direct link.
+ * Desktop primary navigation — every top-level Mithran Agro business line
+ * is a direct, consistent navigation link.
  */
 export function MegaMenu() {
-  const { categories, products } = useCatalog();
-  const router = useRouter();
+  const { products } = useCatalog();
   const pathname = usePathname();
   const params = useSearchParams();
-  const [open, setOpen] = useState(false);
-  const closeTimer = useRef<number | null>(null);
-
-  const openNow = () => {
-    if (closeTimer.current) window.clearTimeout(closeTimer.current);
-    setOpen(true);
-  };
-  const scheduleClose = () => {
-    if (closeTimer.current) window.clearTimeout(closeTimer.current);
-    closeTimer.current = window.setTimeout(() => setOpen(false), 120);
-  };
-  const closeNow = () => {
-    if (closeTimer.current) window.clearTimeout(closeTimer.current);
-    setOpen(false);
-  };
-
-  /* close on Escape */
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") closeNow();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, []);
-
-  const womenCategory = categories.find((category) => category.slug === "women");
-  const womenChildren = womenCategory
-    ? categories.filter((category) => category.active && category.parentId === womenCategory.id)
-    : [];
-  const womenProducts = womenCategory
-    ? products.filter((product) => product.prestaShop?.categoryAncestorIds.includes(womenCategory.id)).slice(0, 3)
-    : [];
   const hasDiscounts = products.some((product) => product.variants.some((variant) => variant.mrp > variant.price));
 
   return (
-    <nav aria-label="Primary" className="hidden border-t border-forest-50/60 lg:block" onMouseLeave={scheduleClose}>
+    <nav aria-label="Primary" className="hidden border-t border-forest-50/60 lg:block">
       <div className="relative mx-auto max-w-7xl px-6">
         <div className="flex h-11 items-center gap-0.5">
           <NavLink href="/" label="Home" active={pathname === "/"} />
@@ -81,144 +40,19 @@ export function MegaMenu() {
             label="Organic Groceries"
             active={pathname === "/category/organic-grocery" || params.get("category") === "organic-grocery"}
           />
-
-          {/* mega menu trigger */}
-          <button
-            aria-expanded={open}
-            aria-haspopup="true"
-            onMouseEnter={openNow}
-            onFocus={openNow}
-            onClick={() => {
-              closeNow();
-              router.push("/category/women");
-            }}
-            className={cn(
-              "inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-lg px-2 py-1.5 text-[13px] font-semibold transition",
-              open || pathname === "/category/women" || pathname.startsWith("/category/sarees") || pathname.startsWith("/category/kurti")
-                ? "bg-forest-50 text-forest-900"
-                : "text-charcoal/80 hover:bg-forest-50 hover:text-forest-900"
-            )}
-          >
-            Women&apos;s Apparels
-            <ChevronDown
-              className={cn("size-3 transition-transform duration-200", open && "rotate-180")}
-              aria-hidden
-            />
-          </button>
-
+          <NavLink
+            href="/category/women"
+            label="Women's Apparels"
+            active={
+              pathname === "/category/women" ||
+              pathname.startsWith("/category/sarees") ||
+              pathname.startsWith("/category/kurti")
+            }
+          />
           {hasDiscounts && <NavLink href="/search?onsale=1" label="Offers" active={params.get("onsale") === "1"} />}
-          <NavLink href="/farms" label="Our Farms" active={pathname === "/farms"} />
+          <NavLink href="/farms" label="Our Farms" active={pathname === "/farms" || pathname.startsWith("/farms/")} />
           <NavLink href="/contact" label="Contact" active={pathname === "/contact"} />
-
         </div>
-
-        {/* ------------------------- mega panel ------------------------- */}
-        <AnimatePresence>
-          {open && (
-            <motion.div
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 4 }}
-              transition={{ duration: 0.18, ease: "easeOut" }}
-              className="absolute inset-x-0 top-full z-50"
-              onMouseEnter={openNow}
-            >
-              <div className="glass-strong mx-auto max-w-5xl overflow-hidden rounded-2xl border border-forest-100 shadow-lift">
-                <div className="flex gap-6 p-6">
-                  {/* subcategories */}
-                  <div className="grid flex-1 grid-cols-3 gap-x-6 gap-y-1">
-                    {womenChildren.map((cat, i) => {
-                      const Icon = CATEGORY_BY_ID[cat.slug]?.icon ?? Grid3X3;
-                      const count = products.filter((product) => product.prestaShop?.categoryAncestorIds.includes(cat.id)).length;
-                      return (
-                        <motion.div
-                          key={cat.id}
-                          initial={{ opacity: 0, x: -6 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          transition={{ delay: 0.03 * i, duration: 0.18 }}
-                        >
-                          <Link
-                            href={`/category/${cat.slug}`}
-                            onClick={closeNow}
-                            className="group flex items-center gap-2.5 rounded-lg py-1.5 pr-2 transition hover:bg-soft"
-                          >
-                            <span className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-forest-50 text-forest-800 transition group-hover:bg-forest-100">
-                              <Icon className="size-3.5" aria-hidden />
-                            </span>
-                            <span className="min-w-0">
-                              <span className="block truncate text-[13px] font-bold text-charcoal group-hover:text-forest-800">
-                                {cat.name}
-                              </span>
-                              <span className="block text-[10px] text-graymute">
-                                {count} products
-                              </span>
-                            </span>
-                          </Link>
-                        </motion.div>
-                      );
-                    })}
-                  </div>
-
-                  {/* store products */}
-                  <div className="hidden w-48 shrink-0 flex-col gap-2 xl:flex">
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-graymute">
-                      Women&apos;s products
-                    </p>
-                    {womenProducts.map((p) => (
-                      <Link
-                        key={p.id}
-                        href={`/products/${p.slug}`}
-                        onClick={closeNow}
-                        className="group flex items-center gap-2.5 rounded-xl p-1.5 transition hover:bg-soft"
-                      >
-                        <SmartImage
-                          src={p.images[0] ?? ""}
-                          alt={p.name}
-                          emojiSeed={p.name}
-                          rounded="rounded-lg"
-                          className="size-11 shrink-0"
-                          sizes="44px"
-                        />
-                        <span className="min-w-0">
-                          <span className="block truncate text-xs font-bold text-charcoal group-hover:text-forest-800">
-                            {p.name}
-                          </span>
-                          <span className="text-[11px] font-semibold text-forest-800">
-                            {formatPrice(p.variants[0].price)}
-                          </span>
-                        </span>
-                      </Link>
-                    ))}
-                  </div>
-
-                  {/* promo card */}
-                  <Link
-                    href="/category/women"
-                    onClick={closeNow}
-                    className="group relative hidden w-52 shrink-0 overflow-hidden rounded-xl lg:block"
-                  >
-                    <Image
-                      src={CATEGORY_BY_ID["women"]?.image || ""}
-                      alt=""
-                      fill
-                      sizes="220px"
-                      className="object-cover transition-transform duration-500 group-hover:scale-105"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-forest-950/85 via-forest-950/25 to-transparent" />
-                    <div className="absolute inset-x-3 bottom-3 text-white">
-                      <p className="text-[10px] font-bold uppercase tracking-widest text-lime-natural">
-                        Woven by artisan clusters
-                      </p>
-                      <p className="mt-0.5 text-sm font-extrabold leading-snug">
-                        Shop Women&apos;s Apparels
-                      </p>
-                    </div>
-                  </Link>
-                </div>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
       </div>
     </nav>
   );
@@ -240,7 +74,7 @@ function NavLink({
         "inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-2 py-1.5 text-[13px] font-semibold transition",
         active
           ? "bg-forest-50 text-forest-900"
-          : "text-charcoal/80 hover:bg-forest-50 hover:text-forest-900"
+          : "text-charcoal/80 hover:bg-forest-50 hover:text-forest-900",
       )}
     >
       {label}

@@ -40,31 +40,47 @@ export function Footer() {
             </div>
           </div>
 
-          {FOOTER_LINKS.map((group) => (
-            <nav key={group.title} aria-label={group.title}>
-              <h3 className="text-sm font-bold uppercase tracking-wider text-charcoal">{group.title}</h3>
-              <ul className="mt-4 space-y-2.5">
-                {group.links.map((link) => (
-                  <li key={link.label}>
-                    <Link
-                      href={link.href}
-                      className="text-sm text-graymute transition hover:text-forest-800"
-                    >
-                      {link.label}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </nav>
-          ))}
+          {FOOTER_LINKS.map((group) => {
+            const isPromiseGroup = group.title === "Our Promise";
+            return (
+              <div key={group.title} aria-label={group.title}>
+                <h3 className="text-sm font-bold uppercase tracking-wider text-charcoal">{group.title}</h3>
+                <ul className="mt-4 space-y-2.5">
+                  {group.links.map((link) => (
+                    <li key={link.label}>
+                      {isPromiseGroup ? (
+                        <span className="text-sm text-graymute">{link.label}</span>
+                      ) : (
+                        <Link
+                          href={link.href}
+                          className="text-sm text-graymute transition hover:text-forest-800"
+                        >
+                          {link.label}
+                        </Link>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            );
+          })}
         </div>
 
         <div className="mt-10 flex flex-col items-center justify-between gap-4 border-t border-forest-50 pt-6 sm:flex-row">
           <p className="text-xs text-graymute">
-            © {year} {SITE.fullName} — live catalog, customer accounts, and Cash on Delivery orders are handled by PrestaShop. Online card payments are not collected.
+            © {year} {SITE.fullName} — live catalog, customer accounts, and Cash on Delivery orders are handled securely by Mithran Agro. Online card payments are not collected.
           </p>
-          <p className="text-xs text-graymute">
-            {SITE.city} · {SITE.supportEmail} · {SITE.supportPhone}
+          <p className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-xs text-graymute">
+            <span>{SITE.city} · {SITE.supportEmail} · {SITE.supportPhone}</span>
+            <span aria-hidden>·</span>
+            <a
+              href="https://shriprocraft.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-semibold text-forest-800 transition hover:underline"
+            >
+              Powered by Shri Procraft
+            </a>
           </p>
         </div>
       </div>

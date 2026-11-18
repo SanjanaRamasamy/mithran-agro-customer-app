@@ -10,20 +10,16 @@ import {
   CreditCard,
   LogOut,
   MapPin,
-  Moon,
   Package,
   ShieldCheck,
   Sparkles,
-  Sun,
   Trash2,
   User,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNotifications } from "@/contexts/NotificationContext";
-import { useTheme } from "@/contexts/ThemeContext";
 import { useToast } from "@/contexts/NotificationContext";
 import { EmptyState } from "@/components/ui/empty-state";
-import { Switch } from "@/components/ui/switch";
 import { RelativeTime } from "@/components/ui/relative-time";
 import { formatDate } from "@/utils/format";
 import { cn } from "@/lib/utils";
@@ -117,7 +113,7 @@ function ProfileForm({
   return (
     <form onSubmit={submit} noValidate aria-label="Edit profile" className="rounded-2xl border border-forest-50 bg-white p-5 shadow-soft sm:p-6">
       <h2 className="text-base font-bold text-charcoal">Personal information</h2>
-      <p className="mt-0.5 text-xs text-graymute">Your name and phone number are saved to your PrestaShop customer profile.</p>
+      <p className="mt-0.5 text-xs text-graymute">Your name and phone number are saved to your Mithran Agro customer profile.</p>
       <div className="mt-4 grid gap-4 sm:grid-cols-2">
         <div>
           <label htmlFor="pf-name" className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-graymute">Full name *</label>
@@ -184,7 +180,6 @@ function AccountInner() {
   const [tab, setTab] = useState<string>(TABS.some((t) => t.key === initialTab) ? initialTab : "profile");
   const { user, isAuthenticated, isLoading, logout, updateProfile, addresses, addAddress, updateAddress, deleteAddress, setDefaultAddress, paymentMethods } = useAuth();
   const { notifications, markRead, markAllRead, remove } = useNotifications();
-  const { theme, toggleTheme } = useTheme();
   const { toast } = useToast();
 
   const [addressDraft, setAddressDraft] = useState<AddressDraft>(EMPTY_ADDRESS);
@@ -268,7 +263,7 @@ function AccountInner() {
       <EmptyState
         icon={User}
         title="Sign in to manage your account"
-        description="Sign in to manage your PrestaShop customer profile and saved delivery addresses."
+        description="Sign in to manage your Mithran Agro customer profile and saved delivery addresses."
         action={{ label: "Sign in", href: "/login?redirect=%2Faccount" }}
         className="mt-8"
       />
@@ -683,17 +678,6 @@ function AccountInner() {
         {/* SETTINGS */}
         {tab === "settings" && (
           <section aria-label="App settings" className="space-y-3">
-            <div className="rounded-2xl border border-forest-50 bg-white p-5 shadow-soft">
-              <h2 className="text-base font-bold text-charcoal">Appearance</h2>
-              <label className="mt-3 flex items-center justify-between rounded-xl bg-soft/70 px-4 py-3.5">
-                <span className="flex items-center gap-2.5 text-sm font-semibold text-charcoal">
-                  {theme === "light" ? <Sun className="size-4 text-amber-500" aria-hidden /> : <Moon className="size-4 text-forest-700" aria-hidden />}
-                  {theme === "light" ? "Light (sage)" : "Dark forest"}
-                </span>
-                <Switch checked={theme === "dark"} onCheckedChange={toggleTheme} aria-label="Toggle dark mode" />
-              </label>
-            </div>
-
             <div className="rounded-2xl border border-forest-50 bg-white p-5 shadow-soft">
               <h2 className="text-base font-bold text-charcoal">Notification preferences</h2>
               <p className="mt-2 text-sm leading-relaxed text-graymute">

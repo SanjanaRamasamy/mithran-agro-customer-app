@@ -165,7 +165,7 @@ export function CheckoutForm() {
       setQuote(null);
       setAddrErrors({});
       setShowNewAddress(false);
-      toast({ title: "Address saved to your PrestaShop account." });
+      toast({ title: "Address saved to your account." });
     } catch (error) {
       toast({
         kind: "error",
@@ -193,7 +193,7 @@ export function CheckoutForm() {
       return;
     }
     if (lines.some((line) => !line.product.prestaShop?.productId)) {
-      toast({ kind: "error", title: "A basket item is not available in the live PrestaShop catalog." });
+      toast({ kind: "error", title: "A basket item is not available in the store catalog." });
       reload();
       return;
     }
@@ -260,11 +260,11 @@ export function CheckoutForm() {
           const message = typeof quotePayload === "object" && quotePayload !== null &&
             "message" in quotePayload && typeof quotePayload.message === "string"
             ? quotePayload.message
-            : "PrestaShop could not calculate the current total.";
+            : "Could not calculate the current order total.";
           throw new Error(message);
         }
         setQuote({ total: quotePayload.quote.total, key: quoteKey });
-        toast({ title: "Current PrestaShop total ready.", description: "Review the amount, then confirm your Cash on Delivery order." });
+        toast({ title: "Order total ready.", description: "Review the amount, then confirm your Cash on Delivery order." });
         return;
       }
 
@@ -293,7 +293,7 @@ export function CheckoutForm() {
         const message = typeof payload === "object" && payload !== null &&
           "message" in payload && typeof payload.message === "string"
           ? payload.message
-          : "PrestaShop could not confirm this order.";
+          : "Could not confirm this order. Please try again.";
         if (response.status === 409) {
           setQuote(null);
           reload();
@@ -354,7 +354,7 @@ export function CheckoutForm() {
       <div className="space-y-5">
         {/* Step 1 — account */}
         <section aria-label="Customer details" className="rounded-2xl border border-forest-50 bg-white p-5 shadow-soft">
-          <StepHeader n={1} title="Customer account" hint="Order details are associated with your PrestaShop account." />
+          <StepHeader n={1} title="Customer account" hint="Order details are associated with your Mithran Agro account." />
           <p className="text-sm font-semibold text-charcoal">{user?.name}</p>
           <p className="mt-0.5 text-xs text-graymute">{user?.email}</p>
         </section>
@@ -568,7 +568,7 @@ export function CheckoutForm() {
 
         {/* Step 3 — delivery */}
         <section aria-label="Delivery" className="rounded-2xl border border-forest-50 bg-white p-5 shadow-soft">
-          <StepHeader n={3} title="Delivery" hint="PrestaShop uses the store's configured delivery carrier." />
+          <StepHeader n={3} title="Delivery" hint="Delivery charges and timing are calculated for your delivery address." />
           <p className="text-sm leading-relaxed text-graymute">
             Delivery timing and fees are calculated by the store carrier. The final amount shown below comes from PrestaShop.
           </p>
@@ -601,7 +601,7 @@ export function CheckoutForm() {
       <aside aria-label="Order summary" className="lg:sticky lg:top-40 lg:self-start">
         <div className="space-y-4">
           <OrderSummary
-            ctaLabel={placing ? "Processing…" : currentQuote ? "Place Cash on Delivery order" : "Review PrestaShop total"}
+            ctaLabel={placing ? "Processing…" : currentQuote ? "Place Cash on Delivery order" : "Review order total"}
             onCta={placeOrderNow}
             disabled={placing}
             sticky={false}
@@ -626,7 +626,7 @@ export function CheckoutForm() {
       {/* mobile sticky place-order */}
       <div className="glass-strong fixed inset-x-3 bottom-20 z-40 flex items-center justify-between gap-3 rounded-2xl p-3 lg:hidden">
         <div className="pl-1">
-          <p className="text-[11px] text-graymute">PrestaShop total</p>
+          <p className="text-[11px] text-graymute">Order total</p>
           <p className="text-base font-extrabold text-charcoal">
             {currentQuote ? formatPrice(currentQuote.total) : "Review total"}
           </p>

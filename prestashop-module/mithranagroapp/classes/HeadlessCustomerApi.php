@@ -125,6 +125,15 @@ class HeadlessCustomerApi
             throw new MithranAgroApiException('invalid_credentials', 401);
         }
 
+        $this->appendCustomerNotification(
+            (int) $customer->id,
+            'login-' . date('Y-m-d'),
+            'system',
+            'Welcome to Mithran Agro',
+            'Welcome to Mithran Agro! Your account is ready.',
+            '/account'
+        );
+
         return $this->authenticationPayload($customer);
     }
 
@@ -171,10 +180,10 @@ class HeadlessCustomerApi
 
         $this->appendCustomerNotification(
             (int) $customer->id,
-            'registration-' . bin2hex(random_bytes(8)),
+            'registration-' . (int) $customer->id,
             'system',
             'Welcome to Mithran Agro',
-            'Your store customer account is ready.',
+            'Welcome to Mithran Agro! Your account is ready.',
             '/account'
         );
         return $this->authenticationPayload($customer);
@@ -253,7 +262,7 @@ class HeadlessCustomerApi
             'password-reset-' . bin2hex(random_bytes(8)),
             'system',
             'Password reset requested',
-            'A password reset email was sent by PrestaShop.',
+            'A password reset email was sent.',
             '/login'
         );
         return ['success' => true];
@@ -580,7 +589,7 @@ class HeadlessCustomerApi
                 'id' => (string) (int) $row['id_order_history'],
                 'status' => $this->appOrderStatus($state, $name),
                 'title' => $name,
-                'description' => 'Status recorded by PrestaShop.',
+                'description' => 'Order status updated.',
                 'timestamp' => (string) $row['date_add'],
                 'completed' => true,
             ];
@@ -958,7 +967,7 @@ class HeadlessCustomerApi
             $orderState = new OrderState($orderStateId);
             if (
                 !Validate::isLoadedObject($orderState) ||
-                empty($orderState->active) ||
+                !empty($orderState->deleted) ||
                 $orderState->paid ||
                 $orderState->logable ||
                 (string) $orderState->module_name !== (string) $this->module->name
@@ -1004,8 +1013,8 @@ class HeadlessCustomerApi
                 (int) $customer->id,
                 'order-' . $orderId,
                 'order',
-                'Order received',
-                'Your PrestaShop order ' . (string) $order->reference . ' was placed.',
+                'Order placed',
+                'Your Mithran Agro order #' . (string) $order->reference . ' has been placed successfully.',
                 '/account/orders/' . $orderId
             );
             return [
@@ -1448,6 +1457,11 @@ class HeadlessCustomerApi
             if ($quantity < 1 || $productId === '0') {
                 continue;
             }
+            $cover = Image::getCover((int) $productId);
+            $coverId = is_array($cover) && !empty($cover['id_image']) ? (int) $cover['id_image'] : 0;
+            $imageUrl = $coverId > 0
+                ? '/api/prestashop/images/products/' . (int) $productId . '/' . $coverId
+                : '';
             $items[] = [
                 'id' => (string) $row['id_order_detail'],
                 'productId' => $productId,
@@ -1456,7 +1470,7 @@ class HeadlessCustomerApi
                     max(0, (int) ($row['product_attribute_id'] ?? 0))
                 ),
                 'name' => (string) ($row['product_name'] ?? ''),
-                'image' => '',
+                'image' => $imageUrl,
                 'sellerName' => 'Mithran Agro',
                 'packLabel' => (string) ($row['product_reference'] ?? 'Unit'),
                 'quantity' => $quantity,
@@ -1475,6 +1489,7 @@ class HeadlessCustomerApi
             : '';
         $placedAt = (string) $order->date_add;
         $tracking = $this->orderHistoryPayload((int) $order->id, $languageId);
+        $this->syncOrderStatusNotification($order, $customer, $status);
 
         return [
             'id' => (string) $order->id,
@@ -1507,26 +1522,68 @@ class HeadlessCustomerApi
         ];
     }
 
+    private function syncOrderStatusNotification($order, $customer, $status)
+    {
+        $orderId = (int) $order->id;
+        $reference = (string) $order->reference;
+        if ($status === 'out-for-delivery') {
+            $this->appendCustomerNotification(
+                (int) $customer->id,
+                'order-' . $orderId . '-shipped',
+                'order',
+                'Order shipped',
+                'Your order #' . $reference . ' has been shipped!',
+                '/orders/' . $orderId
+            );
+        } elseif ($status === 'delivered') {
+            $this->appendCustomerNotification(
+                (int) $customer->id,
+                'order-' . $orderId . '-delivered',
+                'delivery',
+                'Order delivered',
+                'Your order #' . $reference . ' has been delivered successfully. Thank you for choosing Mithran Agro!',
+                '/orders/' . $orderId
+            );
+        }
+    }
+
     private function appOrderStatus($state, $stateName)
     {
         $name = strtolower($stateName);
         if (strpos($name, 'cancel') !== false || strpos($name, 'refund') !== false) {
             return 'cancelled';
         }
-        if (strpos($name, 'deliver') !== false) {
+        // Check PrestaShop's authoritative delivery flag or exact word "delivered"
+        // (never match "delivery" inside "Awaiting Cash on Delivery").
+        if (!empty($state->delivery) || preg_match('/\bdelivered\b/', $name)) {
             return 'delivered';
         }
-        if ($state->shipped) {
+        if (
+            !empty($state->shipped) ||
+            strpos($name, 'ship') !== false ||
+            strpos($name, 'out for delivery') !== false
+        ) {
             return 'out-for-delivery';
         }
-        if (strpos($name, 'pack') !== false || strpos($name, 'prepar') !== false) {
+        if (
+            strpos($name, 'pack') !== false ||
+            strpos($name, 'prepar') !== false ||
+            strpos($name, 'process') !== false
+        ) {
             return 'packed';
         }
-        if (strpos($name, 'await') !== false || strpos($name, 'pending') !== false) {
+        if (strpos($name, 'confirm') !== false || strpos($name, 'payment accepted') !== false) {
+            return 'confirmed';
+        }
+        if (
+            strpos($name, 'await') !== false ||
+            strpos($name, 'pending') !== false ||
+            strpos($name, 'cash on delivery') !== false
+        ) {
             return 'placed';
         }
 
-        return 'confirmed';
+        return 'placed';
     }
 
     private function createSession($customer)

@@ -1,42 +1,39 @@
 "use client";
 
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { readStorage, writeStorage } from "@/utils/storage";
+import React, { createContext, useCallback, useContext, useEffect, useMemo } from "react";
+import { writeStorage } from "@/utils/storage";
 
-type Theme = "light" | "dark";
+type Theme = "light";
 
 interface ThemeContextValue {
   theme: Theme;
   toggleTheme: () => void;
-  setTheme: (t: Theme) => void;
+  setTheme: (t: "light" | "dark") => void;
 }
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 const THEME_KEY = "verdant.theme.v1";
 
+/** Customer App uses light mode only; always clears any legacy `.dark` class. */
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setThemeState] = useState<Theme>("light");
-
   useEffect(() => {
-    const stored = readStorage<Theme>(THEME_KEY, "light");
-    setThemeState(stored);
+    document.documentElement.classList.remove("dark");
+    writeStorage(THEME_KEY, "light");
   }, []);
 
-  useEffect(() => {
-    const root = document.documentElement;
-    root.classList.toggle("dark", theme === "dark");
-    writeStorage(THEME_KEY, theme);
-  }, [theme]);
+  const setTheme = useCallback(() => {
+    document.documentElement.classList.remove("dark");
+    writeStorage(THEME_KEY, "light");
+  }, []);
 
-  const setTheme = useCallback((t: Theme) => setThemeState(t), []);
-  const toggleTheme = useCallback(
-    () => setThemeState((t) => (t === "light" ? "dark" : "light")),
-    []
-  );
+  const toggleTheme = useCallback(() => {
+    document.documentElement.classList.remove("dark");
+    writeStorage(THEME_KEY, "light");
+  }, []);
 
-  const value = useMemo(
-    () => ({ theme, toggleTheme, setTheme }),
-    [theme, toggleTheme, setTheme]
+  const value = useMemo<ThemeContextValue>(
+    () => ({ theme: "light", toggleTheme, setTheme }),
+    [toggleTheme, setTheme],
   );
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
