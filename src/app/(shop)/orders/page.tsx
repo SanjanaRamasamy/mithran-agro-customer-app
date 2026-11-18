@@ -20,7 +20,7 @@ const TABS: { key: string; label: string; statuses?: OrderStatus[] }[] = [
 ];
 
 function OrdersInner() {
-  const { orders } = useOrders();
+  const { orders, isLoading, error } = useOrders();
   const { isAuthenticated, user } = useAuth();
   const [tab, setTab] = useState("all");
 
@@ -30,13 +30,12 @@ function OrdersInner() {
     return orders.filter((o) => def.statuses!.includes(o.status));
   }, [orders, tab]);
 
-  /* guest gate — friendly, one-click demo sign-in */
   if (!isAuthenticated) {
     return (
       <EmptyState
         icon={UserRound}
         title="Sign in to see your orders"
-        description="Sign in to view orders associated with your demo account."
+        description="Sign in to view orders associated with your PrestaShop customer account."
         action={{ label: "Sign in", href: "/login?redirect=%2Forders" }}
         secondaryAction={{ label: "Start shopping", href: "/search" }}
         className="mt-6"
@@ -66,13 +65,19 @@ function OrdersInner() {
       </div>
 
       <div className="mt-6">
-        {filtered.length === 0 ? (
+        {isLoading ? (
+          <div className="shimmer h-40 rounded-2xl" role="status" aria-label="Loading orders" />
+        ) : error ? (
+          <p className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900" role="alert">
+            {error}
+          </p>
+        ) : filtered.length === 0 ? (
           <EmptyState
             icon={tab === "all" ? ShoppingBasket : PackageSearch}
             title={tab === "all" ? "No orders yet" : `No ${TABS.find((t) => t.key === tab)?.label.toLowerCase()} orders`}
             description={
               tab === "all"
-                ? `${user?.name ?? "You"} hasn't placed an order in this demo session yet. The freshest harvest is one tap away.`
+                ? `${user?.name ?? "You"} haven't placed an order yet. The freshest harvest is one tap away.`
                 : "Try another tab — orders move through tabs as their status changes."
             }
             action={{ label: "Browse fresh produce", href: "/search" }}
@@ -104,7 +109,7 @@ export default function OrdersPage() {
         </nav>
         <h1 className="mt-2 text-2xl font-extrabold tracking-tight text-charcoal sm:text-3xl">My orders</h1>
         <p className="mt-1 text-sm text-graymute">
-          Track deliveries, download invoices, reorder favourites — all simulated with local data.
+          View orders placed through your PrestaShop customer account.
         </p>
         <OrdersInner />
       </div>

@@ -59,6 +59,7 @@ export interface Product {
   unitsSold?: number;
   prestaShop?: {
     productId: string;
+    defaultAttributeId: string;
     categoryIds: string[];
     categoryAncestorIds: string[];
     categorySlugs: string[];
@@ -272,6 +273,7 @@ export interface TrackingEvent {
 
 export interface Order {
   id: string;
+  reference?: string;
   userId: string;
   items: OrderItem[];
   status: OrderStatus;
@@ -281,6 +283,7 @@ export interface Order {
   address: Address;
   paymentMethod: string;
   paymentId: string;
+  paymentStatus?: "pending" | "paid";
   totals: CartTotals;
   couponCode?: string;
   invoiceNo: string;

@@ -1,7 +1,13 @@
 import type { AppNotification, Coupon, Offer } from "@/types";
 
-const hoursAgo = (h: number) => new Date(Date.now() - h * 3600_000).toISOString();
-const daysAhead = (d: number) => new Date(Date.now() + d * 86_400_000).toISOString();
+// Fixed reference time for deterministic server/client rendering.
+const MOCK_REFERENCE_TIME = Date.UTC(2026, 10, 15, 7, 0, 0);
+
+const hoursAgo = (hours: number) =>
+  new Date(MOCK_REFERENCE_TIME - hours * 3600_000).toISOString();
+
+const daysAhead = (days: number) =>
+  new Date(MOCK_REFERENCE_TIME + days * 86_400_000).toISOString();
 
 export const MOCK_NOTIFICATIONS: AppNotification[] = [
   {

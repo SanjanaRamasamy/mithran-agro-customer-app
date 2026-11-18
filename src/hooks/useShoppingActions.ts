@@ -54,7 +54,6 @@ export function useShoppingActions() {
       toast({
         kind: result.added ? "success" : "info",
         title: result.message,
-        description: result.added ? "Simulated — wishlist is local to this demo." : undefined,
       });
       return true;
     },
@@ -73,7 +72,7 @@ export function useShoppingActions() {
       const res = cart.addItem(productId, variant.id, 1);
       if (res.ok) {
         wishlist.remove(productId);
-        toast({ title: `${product.name} moved to basket`, description: "Simulated cart action." });
+        toast({ title: `${product.name} moved to basket` });
       } else {
         toast({ kind: "error", title: res.message });
       }

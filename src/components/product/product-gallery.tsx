@@ -61,8 +61,8 @@ export function ProductGallery({ product }: { product: Product }) {
         {product.harvestDate && (
           <span className="glass absolute left-3 top-3 rounded-full px-3 py-1.5 text-xs font-bold text-forest-900">
             {kind === "produce"
-              ? `🌅 Harvested ${new Date(product.harvestDate).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}`
-              : `📦 Listed ${new Date(product.harvestDate).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}`}
+              ? `🌅 Harvested ${new Date(product.harvestDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", timeZone: "Asia/Kolkata" })}`
+              : `📦 Listed ${new Date(product.harvestDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", timeZone: "Asia/Kolkata" })}`}
           </span>
         )}
       </div>

@@ -93,9 +93,8 @@ function packUnit(unit: string): PackUnit {
   return "pc";
 }
 
-function associatedIds(value: unknown): string[] {
-  if (!Array.isArray(value)) return [];
-  return value.flatMap((entry) => {
+function associatedIds(value: unknown, collection: string): string[] {
+  return rows(value, collection).flatMap((entry) => {
     if (!isRecord(entry)) return [];
     const id = text(entry.id);
     return id ? [id] : [];
@@ -130,7 +129,7 @@ function stockAvailableLinkIds(value: unknown): string[] | null {
 }
 
 function imageIds(record: JsonRecord, associations: JsonRecord): string[] {
-  const ids = [text(record.id_default_image), ...associatedIds(associations.images)]
+  const ids = [text(record.id_default_image), ...associatedIds(associations.images, "images")]
     .filter(Boolean);
   return [...new Set(ids)];
 }
@@ -152,6 +151,7 @@ export function getPrestaShopStockAvailableIds(products: unknown[]): string[] {
 export interface PrestaShopStockAvailable {
   id: string;
   productId: string | null;
+  attributeId: string | null;
   shopId: string | null;
   shopGroupId: string | null;
   shopGroupValid: boolean;
@@ -190,6 +190,7 @@ export function parsePrestaShopStockAvailables(
     return [{
       id,
       productId: identifier(record.id_product),
+      attributeId: identifier(record.id_product_attribute, true),
       shopId: identifier(record.id_shop, true),
       shopGroupId,
       shopGroupValid: record.id_shop_group === undefined || shopGroupId !== null,
@@ -209,6 +210,7 @@ export function applyPrestaShopStockAvailables(
       previous &&
       (
         previous.productId !== stock.productId ||
+        previous.attributeId !== stock.attributeId ||
         previous.shopId !== stock.shopId ||
         previous.shopGroupId !== stock.shopGroupId ||
         previous.shopGroupValid !== stock.shopGroupValid ||
@@ -253,6 +255,9 @@ export function applyPrestaShopStockAvailables(
       ) {
         throw new Error("PrestaShop stock record does not match the product shop context.");
       }
+      if (stock.attributeId === null) {
+        throw new Error("PrestaShop stock record is missing its product combination.");
+      }
       if (
         stock.quantity === undefined ||
         !Number.isSafeInteger(stock.quantity) ||
@@ -262,9 +267,21 @@ export function applyPrestaShopStockAvailables(
       }
     }
 
-    // This catalog exposes one sellable variant per product, so distinct attribute
-    // stock rows are aggregated only after validating their shared product/shop scope.
-    const quantity = linkedStocks.reduce((total, stock) => {
+    const defaultAttributeId = identifier(product.cache_default_attribute, true);
+    const attributeIds = [...new Set(linkedStocks.map((stock) => stock.attributeId))];
+    const resolvedDefaultAttributeId = defaultAttributeId ??
+      (attributeIds.length === 1 && attributeIds[0] === "0" ? "0" : null);
+    if (
+      resolvedDefaultAttributeId === null ||
+      !attributeIds.includes(resolvedDefaultAttributeId)
+    ) {
+      throw new Error("PrestaShop default product combination could not be verified.");
+    }
+
+    const selectedStocks = linkedStocks.filter(
+      (stock) => stock.attributeId === resolvedDefaultAttributeId
+    );
+    const quantity = selectedStocks.reduce((total, stock) => {
       if (stock.quantity === undefined) {
         throw new Error("PrestaShop stock record has an invalid quantity.");
       }
@@ -273,7 +290,11 @@ export function applyPrestaShopStockAvailables(
     if (!Number.isSafeInteger(quantity)) {
       throw new Error("PrestaShop stock total exceeds the supported quantity range.");
     }
-    return { ...product, quantity };
+    return {
+      ...product,
+      quantity,
+      cache_default_attribute: resolvedDefaultAttributeId,
+    };
   });
 }
 
@@ -290,7 +311,7 @@ export function mapPrestaShopProduct(
 
   const associations = isRecord(value.associations) ? value.associations : {};
   const categoryIds = [...new Set([
-    ...associatedIds(associations.categories),
+    ...associatedIds(associations.categories, "categories"),
     text(value.id_category_default),
   ].filter(Boolean))];
   const categoriesById = new Map(categories.map((category) => [category.id, category]));
@@ -320,8 +341,9 @@ export function mapPrestaShopProduct(
   const active = flag(value.active);
   const availableForOrder = flag(value.available_for_order);
   const inStock = active && availableForOrder && quantity >= minimumQuantity;
+  const defaultAttributeId = identifier(value.cache_default_attribute, true) ?? "0";
   const variant: ProductVariant = {
-    id: `prestashop-${productId}`,
+    id: `prestashop-${productId}${defaultAttributeId === "0" ? "" : `-${defaultAttributeId}`}`,
     name: unit || "Unit",
     packSize: { value: 1, unit: packUnit(unit), label: unit || undefined },
     price,
@@ -361,6 +383,7 @@ export function mapPrestaShopProduct(
     createdAt: text(value.date_add),
     prestaShop: {
       productId,
+      defaultAttributeId,
       categoryIds,
       categoryAncestorIds: [...categoryAncestorIds],
       categorySlugs: [...categorySlugs],

@@ -9,7 +9,7 @@ import { useShoppingActions } from "@/hooks/useShoppingActions";
 import { useCatalog } from "@/contexts/CatalogContext";
 import { ProductCard } from "@/components/product/product-card";
 import { EmptyState } from "@/components/ui/empty-state";
-import { timeAgo } from "@/utils/format";
+import { RelativeTime } from "@/components/ui/relative-time";
 import { ProtectedRoute } from "@/components/auth/protected-route";
 
 export default function WishlistPage() {
@@ -46,7 +46,7 @@ export default function WishlistPage() {
           <h1 className="text-2xl font-extrabold tracking-tight text-charcoal sm:text-3xl">My wishlist</h1>
           <p className="mt-1 text-sm text-graymute">
             {products.length > 0
-              ? `${products.length} saved ${products.length === 1 ? "item" : "items"} — synced locally in this demo`
+              ? `${products.length} saved ${products.length === 1 ? "item" : "items"} — saved to your store wishlist`
               : "Save produce you love and find it here"}
           </p>
         </div>
@@ -79,7 +79,7 @@ export default function WishlistPage() {
             <motion.div key={product.id} layout role="listitem" className="relative">
               <ProductCard product={product} />
               <div className="mt-1.5 flex items-center justify-between px-1">
-                <span className="text-[10px] text-graymute">saved {timeAgo(entry.addedAt)}</span>
+                <span className="text-[10px] text-graymute">saved <RelativeTime timestamp={entry.addedAt} /></span>
                 <div className="flex gap-1">
                   <button
                     onClick={() => moveWishlistItemToCart(product.id)}

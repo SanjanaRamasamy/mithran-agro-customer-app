@@ -2,12 +2,14 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import {
   BadgeCheck,
   Heart,
   MapPin,
   RefreshCcw,
+  Share2,
   ShieldCheck,
   ShoppingBasket,
   Sparkles,
@@ -15,11 +17,13 @@ import {
   Zap,
 } from "lucide-react";
 import type { Product } from "@/types";
-import { SELLER_BY_ID } from "@/data/sellers";
 import { CATEGORY_BY_ID, categoryKind } from "@/data/categories";
 import { useActivity } from "@/contexts/ActivityContext";
 import { useShoppingActions } from "@/hooks/useShoppingActions";
 import { useWishlist } from "@/contexts/WishlistContext";
+import { useAuth } from "@/contexts/AuthContext";
+import { useAuthPrompt } from "@/contexts/AuthPromptContext";
+import { useToast } from "@/contexts/NotificationContext";
 import { ProductGallery } from "./product-gallery";
 import { ProductRail } from "@/components/home/product-rail";
 import { Rating, RatingBar } from "@/components/ui/rating";
@@ -31,6 +35,7 @@ import { SmartImage } from "@/components/ui/smart-image";
 import { reviewsForProduct, ratingBreakdown } from "@/data/reviews";
 import { formatPrice, formatDate, calcDiscountPercent } from "@/utils/format";
 import { cn } from "@/lib/utils";
+import { sanitizeProductDescription } from "@/lib/product-description";
 import { FAQS } from "@/data/banners";
 import { useCatalog } from "@/contexts/CatalogContext";
 
@@ -39,6 +44,12 @@ import { useCatalog } from "@/contexts/CatalogContext";
 /* ------------------------------------------------------------------ */
 
 function BuyBox({ product }: { product: Product }) {
+  const router = useRouter();
+  const { isAuthenticated } = useAuth();
+  const { showAuthPrompt } = useAuthPrompt();
+  const { toast } = useToast();
+  const { farmBySlug } = useCatalog();
+  const farm = product.sellerId ? farmBySlug[product.sellerId] : undefined;
   const minimumQuantity = product.prestaShop?.minimumQuantity ?? 1;
   const [variantId, setVariantId] = useState(product.variants.find((v) => v.inStock)?.id ?? product.variants[0].id);
   const [qty, setQty] = useState(minimumQuantity);
@@ -70,6 +81,15 @@ function BuyBox({ product }: { product: Product }) {
         <h1 className="mt-2 text-2xl font-extrabold tracking-tight text-charcoal sm:text-3xl">
           {product.name}
         </h1>
+        {farm && (
+          <p className="mt-1.5 text-xs font-semibold text-graymute">
+            Grown by{" "}
+            <Link href={`/farms/${farm.slug}`} className="font-bold text-forest-800 hover:underline">
+              {farm.name}
+            </Link>
+            {farm.location ? ` · ${farm.location}` : ""}
+          </p>
+        )}
         {product.tagline && <p className="mt-1 text-sm text-graymute">{product.tagline}</p>}
         {product.reviewCount > 0 && (
           <div className="mt-2"><Rating value={product.rating} count={product.reviewCount} size="md" /></div>
@@ -146,6 +166,22 @@ function BuyBox({ product }: { product: Product }) {
             {canPurchase ? "Add to basket" : "Out of stock"}
           </motion.button>
           <motion.button
+            whileTap={{ scale: 0.97 }}
+            onClick={() => {
+              addToCart(product.id, variant.id, qty, { silent: true });
+              if (!isAuthenticated) {
+                showAuthPrompt({ kind: "checkout", returnTo: "/checkout" });
+                return;
+              }
+              router.push("/checkout");
+            }}
+            disabled={!canPurchase}
+            className="inline-flex h-12 items-center justify-center gap-1.5 rounded-2xl border border-forest-900 bg-white px-4 text-sm font-bold text-forest-900 transition hover:bg-forest-50 disabled:cursor-not-allowed disabled:border-gray-200 disabled:text-gray-400"
+          >
+            <Zap className="size-4" aria-hidden />
+            Buy Now
+          </motion.button>
+          <motion.button
             whileTap={{ scale: 0.9 }}
             onClick={() => toggleWishlist(product.id)}
             aria-label={wished ? "Remove from wishlist" : "Add to wishlist"}
@@ -156,6 +192,26 @@ function BuyBox({ product }: { product: Product }) {
             )}
           >
             <Heart className={cn("size-5", wished && "fill-red-500")} aria-hidden />
+          </motion.button>
+          <motion.button
+            whileTap={{ scale: 0.9 }}
+            onClick={async () => {
+              const url = window.location.href;
+              try {
+                if (navigator.share) {
+                  await navigator.share({ title: product.name, url });
+                } else if (navigator.clipboard?.writeText) {
+                  await navigator.clipboard.writeText(url);
+                  toast({ kind: "success", title: "Product link copied to clipboard" });
+                }
+              } catch {
+                // User cancelled share sheet
+              }
+            }}
+            aria-label="Share product"
+            className="flex size-12 items-center justify-center rounded-2xl border border-forest-100 bg-white text-graymute transition hover:border-forest-300 hover:text-forest-800 active:scale-90"
+          >
+            <Share2 className="size-4" aria-hidden />
           </motion.button>
         </div>
 
@@ -192,7 +248,8 @@ function BuyBox({ product }: { product: Product }) {
 /* ------------------------------------------------------------------ */
 
 function InfoPanels({ product }: { product: Product }) {
-  const seller = SELLER_BY_ID[product.sellerId];
+  const { farmBySlug } = useCatalog();
+  const seller = product.sellerId ? farmBySlug[product.sellerId] : undefined;
   const category = CATEGORY_BY_ID[product.categoryId];
   const kind = categoryKind(product);
 
@@ -240,12 +297,18 @@ function InfoPanels({ product }: { product: Product }) {
   const hasProductDetails = Boolean(
     product.description || rows.length || product.organicDetails || product.nutrition
   );
+  const descriptionHtml = sanitizeProductDescription(product.description);
 
   return (
     <div className="grid gap-5 lg:grid-cols-2">
       {hasProductDetails && <section aria-label="Product details" className="rounded-2xl border border-forest-50 bg-white p-5 shadow-soft">
         <h2 className="text-base font-bold text-charcoal">{aboutTitle}</h2>
-        <p className="mt-2 text-sm leading-relaxed text-graymute">{product.description}</p>
+        {descriptionHtml && (
+          <div
+            className="mt-2 space-y-3 text-sm leading-relaxed text-graymute [&_h1]:text-lg [&_h1]:font-bold [&_h2]:text-base [&_h2]:font-bold [&_h3]:font-semibold [&_h4]:font-semibold [&_h5]:font-semibold [&_h6]:font-semibold [&_li]:pl-1 [&_ol]:list-decimal [&_ol]:pl-5 [&_strong]:font-semibold [&_ul]:list-disc [&_ul]:pl-5"
+            dangerouslySetInnerHTML={{ __html: descriptionHtml }}
+          />
+        )}
 
         <dl className="mt-4 divide-y divide-forest-50">
           {rows.map((r) => (
@@ -280,46 +343,45 @@ function InfoPanels({ product }: { product: Product }) {
         )}
       </section>}
 
-      <section aria-label={seller ? "Seller information" : "Category information"} className="rounded-2xl border border-forest-50 bg-white p-5 shadow-soft">
+      <section aria-label={seller ? "Farm information" : "Category information"} className="rounded-2xl border border-forest-50 bg-white p-5 shadow-soft">
         <h2 className="text-base font-bold text-charcoal">{seller ? sellerTitle : "Category"}</h2>
         {seller && (
           <>
             <div className="mt-3 flex items-center gap-3.5">
               <SmartImage
-                src={seller.avatar}
+                src={seller.logoUrl || seller.coverUrl}
                 alt={seller.name}
-                emojiSeed="farmer"
+                emojiSeed="farm"
                 rounded="rounded-full"
                 className="size-14 shrink-0 ring-2 ring-forest-100"
                 sizes="56px"
               />
               <div className="min-w-0">
-                <p className="truncate text-sm font-bold text-charcoal">{seller.farmName}</p>
-                <p className="truncate text-xs text-graymute">
-                  {seller.name} · farming since {seller.since}
+                <p className="flex items-center gap-1 truncate text-sm font-bold text-charcoal">
+                  {seller.name}
+                  {seller.isVerified && (
+                    <BadgeCheck className="size-4 shrink-0 text-forest-700" aria-label="Verified farm" />
+                  )}
                 </p>
-                <div className="mt-1">
-                  <Rating value={seller.rating} count={seller.reviewCount} />
-                </div>
+                {seller.ownerName && (
+                  <p className="truncate text-xs text-graymute">{seller.ownerName}</p>
+                )}
               </div>
             </div>
-            <p className="mt-3 text-xs leading-relaxed text-graymute">{seller.bio}</p>
-            <p className="mt-3 flex items-center gap-1.5 text-xs font-semibold text-forest-800">
-              <MapPin className="size-3.5" aria-hidden />
-              {seller.location} · {seller.distanceKm} km away
-            </p>
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              {seller.certifications.map((c) => (
-                <span key={c} className="inline-flex items-center gap-1 rounded-full bg-forest-50 px-2.5 py-1 text-[10px] font-bold text-forest-800">
-                  <BadgeCheck className="size-3" aria-hidden /> {c}
-                </span>
-              ))}
-            </div>
+            {seller.shortDescription && (
+              <p className="mt-3 text-xs leading-relaxed text-graymute">{seller.shortDescription}</p>
+            )}
+            {seller.location && (
+              <p className="mt-3 flex items-center gap-1.5 text-xs font-semibold text-forest-800">
+                <MapPin className="size-3.5" aria-hidden />
+                {seller.location}
+              </p>
+            )}
             <Link
-              href={`/search?seller=${seller.id}`}
+              href={`/farms/${seller.slug}`}
               className="mt-4 inline-flex h-10 items-center rounded-xl border border-forest-200 bg-white px-4 text-xs font-bold text-forest-800 transition hover:bg-forest-50"
             >
-              Shop all {seller.productsCount} products from this farm
+              Visit Farm · {seller.productIds.length} {seller.productIds.length === 1 ? "product" : "products"}
             </Link>
           </>
         )}
@@ -447,18 +509,37 @@ function FaqSection() {
 
 function RelatedProducts({ product }: { product: Product }) {
   const { products } = useCatalog();
-  const related = products.filter((candidate) =>
-    candidate.id !== product.id &&
-    candidate.prestaShop?.categoryIds.some((id) => product.prestaShop?.categoryIds.includes(id))
-  ).slice(0, 10);
+  const specificCategoryIds = new Set(
+    (product.prestaShop?.categoryIds ?? []).filter((id) => id !== "1" && id !== "2")
+  );
+  const related = products
+    .filter((candidate) => {
+      if (candidate.id === product.id) return false;
+      if (product.categoryId && candidate.categoryId === product.categoryId) return true;
+      return Boolean(
+        candidate.prestaShop?.categoryIds.some((id) => specificCategoryIds.has(id)) ||
+          candidate.prestaShop?.categoryAncestorIds.some((id) => specificCategoryIds.has(id))
+      );
+    })
+    .sort((left, right) => {
+      const leftSame = left.categoryId === product.categoryId ? 0 : 1;
+      const rightSame = right.categoryId === product.categoryId ? 0 : 1;
+      return leftSame - rightSame;
+    })
+    .slice(0, 10);
 
   if (!related.length) return null;
+
+  const categoryName =
+    product.prestaShop?.categoryName ||
+    CATEGORY_BY_ID[product.categoryId]?.name ||
+    "the marketplace";
 
   return (
     <section aria-label="Related products">
       <SectionHeading
         title="Pairs beautifully with"
-        subtitle={`More from ${CATEGORY_BY_ID[product.categoryId]?.name ?? "the marketplace"}`}
+        subtitle={`More from ${categoryName}`}
         viewAllHref={`/category/${product.categoryId}`}
       />
       <ProductRail products={related} />
@@ -471,6 +552,11 @@ function RelatedProducts({ product }: { product: Product }) {
 /* ------------------------------------------------------------------ */
 
 export default function ProductDetailsContent({ product }: { product: Product }) {
+  const categoryName =
+    product.prestaShop?.categoryName ||
+    CATEGORY_BY_ID[product.categoryId]?.name ||
+    product.categoryId;
+
   return (
     <div className="mx-auto max-w-7xl space-y-8 px-4 py-6 sm:px-6 sm:py-8">
       {/* breadcrumbs */}
@@ -480,7 +566,7 @@ export default function ProductDetailsContent({ product }: { product: Product })
           <li aria-hidden>/</li>
           <li>
             <Link href={`/category/${product.categoryId}`} className="hover:text-forest-800">
-              {CATEGORY_BY_ID[product.categoryId]?.name}
+              {categoryName}
             </Link>
           </li>
           <li aria-hidden>/</li>
@@ -513,14 +599,19 @@ export default function ProductDetailsContent({ product }: { product: Product })
 function MobileAddButton({ product }: { product: Product }) {
   const { addToCart } = useShoppingActions();
   const variant = product.variants.find((v) => v.inStock) ?? product.variants[0];
+  const minimumQuantity = product.prestaShop?.minimumQuantity ?? 1;
+  const canPurchase =
+    variant.inStock &&
+    product.prestaShop?.active !== false &&
+    product.prestaShop?.availableForOrder !== false;
   return (
     <button
-      onClick={() => addToCart(product.id, variant.id)}
-      disabled={!variant.inStock}
+      onClick={() => addToCart(product.id, variant.id, minimumQuantity)}
+      disabled={!canPurchase}
       className="inline-flex h-11 shrink-0 items-center gap-2 rounded-xl bg-forest-900 px-5 text-sm font-bold text-white active:scale-95 disabled:bg-gray-300"
     >
       <ShoppingBasket className="size-4" aria-hidden />
-      {variant.inStock ? "Add" : "Sold out"}
+      {canPurchase ? "Add" : "Sold out"}
     </button>
   );
 }

@@ -110,6 +110,7 @@ export function CartDrawer() {
                             value={line.quantity}
                             size="sm"
                             min={0}
+                            max={line.variant.stockCount || 10}
                             onChange={(q) => updateQuantity(line.id, q)}
                             ariaLabel={`Quantity of ${line.product.name}`}
                           />
@@ -151,7 +152,7 @@ export function CartDrawer() {
                     <ArrowRight className="size-4" aria-hidden />
                   </Link>
                   <p className="mt-2 text-center text-[11px] text-graymute">
-                    Simulated cart — no payment is processed in this demo.
+                    Live PrestaShop inventory and final total are verified at checkout.
                   </p>
                 </div>
               </>

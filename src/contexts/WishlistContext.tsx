@@ -1,8 +1,11 @@
 "use client";
 
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { WishlistEntry } from "@/types";
-import { readStorage, writeStorage } from "@/utils/storage";
+import { readStorage, removeStorage, writeStorage } from "@/utils/storage";
+import { useAuth } from "@/contexts/AuthContext";
+import { useToast } from "@/contexts/NotificationContext";
+import { mergeCustomerWishlist, parseCustomerWishlist } from "@/utils/customer-sync";
 import { useCatalog } from "@/contexts/CatalogContext";
 import { getBestVariant } from "@/utils/product";
 
@@ -22,52 +25,166 @@ const WishlistContext = createContext<WishlistContextValue | null>(null);
 
 export function WishlistProvider({ children }: { children: React.ReactNode }) {
   const { products } = useCatalog();
+  const { user, isLoading: authLoading } = useAuth();
+  const { toast } = useToast();
   const productsById = useMemo(
     () => Object.fromEntries(products.map((product) => [product.id, product])),
     [products]
   );
   const [entries, setEntries] = useState<WishlistEntry[]>([]);
-  const [hydrated, setHydrated] = useState(false);
+  const [storageOwner, setStorageOwner] = useState<string | null | undefined>(undefined);
+  const persistenceQueue = useRef<Promise<void>>(Promise.resolve());
+  const currentUserId = useRef<string | null>(user?.id ?? null);
+  const hasCurrentStorage = storageOwner === (user?.id ?? null);
+  const visibleEntries = hasCurrentStorage ? entries : [];
 
   useEffect(() => {
-    setEntries(readStorage<WishlistEntry[]>(WISHLIST_KEY, []));
-    setHydrated(true);
-  }, []);
+    currentUserId.current = user?.id ?? null;
+  }, [user?.id]);
 
   useEffect(() => {
-    if (hydrated) writeStorage(WISHLIST_KEY, entries);
-  }, [entries, hydrated]);
+    if (authLoading) return;
+    let cancelled = false;
+    const customerId = user?.id ?? null;
+    setStorageOwner(undefined);
+
+    if (!customerId) {
+      setEntries(readStorage<WishlistEntry[]>(WISHLIST_KEY, []));
+      setStorageOwner(null);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    const loadCustomerWishlist = async () => {
+      try {
+        const response = await fetch("/api/customer/wishlist", { cache: "no-store" });
+        const payload: unknown = await response.json();
+        if (
+          !response.ok ||
+          typeof payload !== "object" ||
+          payload === null ||
+          !("entries" in payload)
+        ) {
+          throw new Error("Unable to load your saved wishlist.");
+        }
+        const remoteEntries = parseCustomerWishlist(payload.entries);
+        if (!remoteEntries) throw new Error("Your saved wishlist could not be read.");
+
+        const guestRaw: unknown = readStorage<unknown>(WISHLIST_KEY, []);
+        const guestEntries = parseCustomerWishlist(guestRaw);
+        let nextEntries = remoteEntries;
+        if (guestEntries && guestEntries.length > 0) {
+          const merged = mergeCustomerWishlist(remoteEntries, guestEntries);
+          const saveResponse = await fetch("/api/customer/wishlist", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            cache: "no-store",
+            body: JSON.stringify({ entries: merged }),
+          });
+          const savePayload: unknown = await saveResponse.json();
+          const savedEntries =
+            typeof savePayload === "object" &&
+            savePayload !== null &&
+            "entries" in savePayload
+              ? parseCustomerWishlist(savePayload.entries)
+              : null;
+          if (!saveResponse.ok || !savedEntries) {
+            toast({
+              kind: "error",
+              title: "Your guest wishlist could not be merged. It remains saved in this browser.",
+            });
+          } else {
+            nextEntries = savedEntries;
+            removeStorage(WISHLIST_KEY);
+          }
+        } else if (guestEntries === null) {
+          toast({
+            kind: "error",
+            title: "Your guest wishlist could not be synced. It remains saved in this browser.",
+          });
+        }
+
+        if (!cancelled) {
+          setEntries(nextEntries);
+          setStorageOwner(customerId);
+        }
+      } catch {
+        if (!cancelled) {
+          toast({
+            kind: "error",
+            title: "Your saved wishlist could not be loaded from your account.",
+          });
+        }
+      }
+    };
+    void loadCustomerWishlist();
+    return () => {
+      cancelled = true;
+    };
+  }, [authLoading, user?.id, toast]);
+
+  useEffect(() => {
+    if (storageOwner === null && !user) writeStorage(WISHLIST_KEY, entries);
+    if (storageOwner && storageOwner === user?.id) {
+      const ownerId = storageOwner;
+      const snapshot = JSON.stringify({ entries });
+      persistenceQueue.current = persistenceQueue.current
+        .catch(() => undefined)
+        .then(async () => {
+          if (currentUserId.current !== ownerId) return;
+          const response = await fetch("/api/customer/wishlist", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            cache: "no-store",
+            body: snapshot,
+          });
+          if (!response.ok) throw new Error("Wishlist synchronization failed.");
+        })
+        .catch(() => {
+          if (currentUserId.current === ownerId) {
+            toast({
+              kind: "error",
+              title: "Your wishlist changes could not be synced to your account.",
+            });
+          }
+        });
+    }
+  }, [entries, storageOwner, user?.id, toast]);
 
   const has = useCallback(
-    (productId: string) => entries.some((e) => e.productId === productId),
-    [entries]
+    (productId: string) => visibleEntries.some((e) => e.productId === productId),
+    [visibleEntries]
   );
 
   const toggle = useCallback(
     (productId: string): { added: boolean; message: string } => {
+      if (!hasCurrentStorage) {
+        return { added: false, message: "Your wishlist is still loading." };
+      }
       const product = productsById[productId];
       const name = product?.name ?? "Product";
-      let added = false;
-      setEntries((prev) => {
-        if (prev.some((e) => e.productId === productId)) {
-          return prev.filter((e) => e.productId !== productId);
-        }
-        added = true;
-        return [...prev, { productId, addedAt: new Date().toISOString() }];
-      });
+      const added = !visibleEntries.some((entry) => entry.productId === productId);
+      setEntries((prev) => added
+        ? [...prev, { productId, addedAt: new Date().toISOString() }]
+        : prev.filter((entry) => entry.productId !== productId));
       return {
         added,
         message: added ? `${name} saved to wishlist` : `${name} removed from wishlist`,
       };
     },
-    [productsById]
+    [hasCurrentStorage, visibleEntries, productsById]
   );
 
   const remove = useCallback((productId: string) => {
+    if (!hasCurrentStorage) return;
     setEntries((prev) => prev.filter((e) => e.productId !== productId));
-  }, []);
+  }, [hasCurrentStorage]);
 
-  const clear = useCallback(() => setEntries([]), []);
+  const clear = useCallback(() => {
+    if (!hasCurrentStorage) return;
+    setEntries([]);
+  }, [hasCurrentStorage]);
 
   /** Wishlist → cart uses the best available variant. */
   const moveToCart = useCallback(
@@ -84,15 +201,15 @@ export function WishlistProvider({ children }: { children: React.ReactNode }) {
 
   const value = useMemo<WishlistContextValue>(
     () => ({
-      entries,
-      count: entries.length,
+      entries: visibleEntries,
+      count: visibleEntries.length,
       has,
       toggle,
       remove,
       clear,
       moveToCart,
     }),
-    [entries, has, toggle, remove, clear, moveToCart]
+    [visibleEntries, has, toggle, remove, clear, moveToCart]
   );
 
   return <WishlistContext.Provider value={value}>{children}</WishlistContext.Provider>;

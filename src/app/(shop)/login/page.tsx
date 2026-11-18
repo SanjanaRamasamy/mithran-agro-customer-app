@@ -18,20 +18,21 @@ function LoginInner() {
   const router = useRouter();
   const params = useSearchParams();
   const redirect = safeReturnPath(params.get("redirect"));
-  const { login, loginWithGoogle } = useAuth();
+  const { login, register, authError } = useAuth();
   const { products } = useCatalog();
   const wishlist = useWishlist();
   const { toast } = useToast();
   const requestedWishlistProduct = params.get("wishlistProductId");
 
-  const [mode, setMode] = useState<"login" | "signup">("login");
-  const [email, setEmail] = useState("aarav.sharma@example.com");
+  const [mode, setMode] = useState<"login" | "signup">(
+    params.get("mode") === "signup" ? "signup" : "login"
+  );
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const [showPw, setShowPw] = useState(false);
   const [errors, setErrors] = useState<{ email?: string; password?: string; name?: string }>({});
-  const [forgotOpen, setForgotOpen] = useState(false);
-  const [forgotEmail, setForgotEmail] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   const finishSignIn = () => {
     const wishlistProductId = requestedWishlistAddition(
@@ -48,33 +49,32 @@ function LoginInner() {
   const validate = () => {
     const errs: typeof errors = {};
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) errs.email = "Enter a valid email address.";
-    if (password.length < 6) errs.password = "Password must be at least 6 characters (mock rule).";
+    if (password.length < 8) errs.password = "Password must be at least 8 characters.";
     if (mode === "signup" && name.trim().length < 2) errs.name = "Please tell us your name.";
     setErrors(errs);
     return Object.keys(errs).length === 0;
   };
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!validate()) return;
-    login(email, mode === "signup" ? name : undefined);
-    toast({
-      title: mode === "signup" ? `Welcome to Mithren Agro, ${name.split(" ")[0]}! 🌱` : "Welcome back! 🌱",
-      description: "Simulated session — credentials are never sent anywhere.",
-    });
-    finishSignIn();
-  };
-
-  const googleLogin = () => {
-    loginWithGoogle();
-    toast({ title: "Signed in with Google (simulated)", description: "No real OAuth happened — this is a demo." });
-    finishSignIn();
-  };
-
-  const demoLogin = () => {
-    login("aarav.sharma@example.com");
-    toast({ title: "Exploring as demo user", description: "Aarav's mock profile, orders and addresses are loaded." });
-    finishSignIn();
+    if (!validate() || submitting) return;
+    setSubmitting(true);
+    try {
+      if (mode === "signup") {
+        await register(name.trim(), email.trim(), password);
+      } else {
+        await login(email.trim(), password);
+      }
+      toast({ title: mode === "signup" ? "Your account is ready." : "Welcome back." });
+      finishSignIn();
+    } catch (error) {
+      toast({
+        kind: "error",
+        title: error instanceof Error ? error.message : "Unable to sign in.",
+      });
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const inputCls =
@@ -103,10 +103,10 @@ function LoginInner() {
             The basket that knows its farmer.
           </h2>
           <p className="mt-3 max-w-sm text-sm leading-relaxed text-forest-50/80">
-            Sign in to track orders, sync your wishlist, unlock member harvest boxes and earn leaf points on every organic rupee.
+            Sign in to view your PrestaShop orders and manage saved delivery addresses.
           </p>
           <ul className="mt-8 space-y-3">
-            {["Track farm-to-door deliveries in real time", "Members-only seasonal boxes", "Instant freshness refunds"].map((t) => (
+            {["View orders associated with your store account", "Manage saved delivery addresses", "Place Cash on Delivery orders"].map((t) => (
               <li key={t} className="flex items-center gap-2.5 text-sm text-forest-50/90">
                 <ShieldCheck className="size-4 shrink-0 text-lime-natural" aria-hidden />
                 {t}
@@ -115,7 +115,7 @@ function LoginInner() {
           </ul>
         </div>
         <p className="relative text-xs text-forest-50/60">
-          Demo environment — authentication is fully simulated, nothing leaves your browser.
+          Your account is securely verified by the Mithran Agro store.
         </p>
       </div>
 
@@ -138,26 +138,12 @@ function LoginInner() {
           <p className="mt-1.5 text-sm text-graymute">
             {mode === "login"
               ? "Sign in to continue your organic journey."
-              : "Join thousands of households eating farm-direct."}
+              : "Create a PrestaShop customer account to place orders."}
           </p>
 
-          <button
-            onClick={googleLogin}
-            className="mt-6 flex h-12 w-full items-center justify-center gap-3 rounded-xl border border-forest-100 bg-white text-sm font-semibold text-charcoal shadow-soft transition hover:bg-soft active:scale-[0.98]"
-          >
-            <svg viewBox="0 0 24 24" className="size-5" aria-hidden>
-              <path fill="#EA4335" d="M12 5.04c1.62 0 3.06.56 4.2 1.64l3.12-3.12C17.46 1.8 14.96.72 12 .72 7.44.72 3.56 3.36 1.72 7.16l3.66 2.84C6.26 7.14 8.88 5.04 12 5.04z"/>
-              <path fill="#4285F4" d="M23.28 12.26c0-.92-.08-1.6-.26-2.3H12v4.34h6.44c-.13 1.08-.83 2.7-2.39 3.79l3.57 2.77c2.14-1.98 3.66-4.89 3.66-8.6z"/>
-              <path fill="#FBBC05" d="M5.4 14.2a6.9 6.9 0 0 1 0-4.4L1.72 6.96a11.28 11.28 0 0 0 0 10.08l3.66-2.84z"/>
-              <path fill="#34A853" d="M12 23.28c3.04 0 5.6-1 7.46-2.73l-3.57-2.77c-.95.66-2.23 1.13-3.89 1.13-3.12 0-5.74-2.1-6.62-4.96l-3.66 2.84c1.84 3.8 5.72 6.49 10.28 6.49z"/>
-            </svg>
-            Continue with Google
-            <span className="rounded-full bg-soft px-2 py-0.5 text-[10px] font-bold text-graymute">mock</span>
-          </button>
-
-          <div className="my-5 flex items-center gap-3">
+          <div className="mb-5 mt-6 flex items-center gap-3">
             <span className="h-px flex-1 bg-forest-100" aria-hidden />
-            <span className="text-xs font-medium text-graymute">or with email</span>
+            <span className="text-xs font-medium text-graymute">Store account</span>
             <span className="h-px flex-1 bg-forest-100" aria-hidden />
           </div>
 
@@ -224,8 +210,8 @@ function LoginInner() {
             <div className="flex items-center justify-between">
               <button
                 type="button"
-                onClick={() => setForgotOpen(true)}
                 className="text-xs font-bold text-forest-700 hover:text-forest-900"
+                onClick={() => router.push("/forgot-password")}
               >
                 Forgot password?
               </button>
@@ -250,74 +236,22 @@ function LoginInner() {
 
             <motion.button
               whileTap={{ scale: 0.98 }}
+              disabled={submitting}
               type="submit"
-              className="h-12 w-full rounded-xl bg-forest-900 text-sm font-bold text-white shadow-soft transition hover:bg-forest-800"
+              className="h-12 w-full rounded-xl bg-forest-900 text-sm font-bold text-white shadow-soft transition hover:bg-forest-800 disabled:cursor-wait disabled:opacity-60"
             >
-              {mode === "login" ? "Sign in" : "Create account"}
+              {submitting ? "Please wait…" : mode === "login" ? "Sign in" : "Create account"}
             </motion.button>
           </form>
 
-          <div className="mt-6 rounded-2xl bg-soft/70 p-4 text-center">
-            <p className="text-xs leading-relaxed text-graymute">
-              Just exploring? Skip the form —
+          {authError && (
+            <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-xs text-amber-900" role="status">
+              {authError}
             </p>
-            <button
-              onClick={demoLogin}
-              className="mt-2 inline-flex h-10 items-center rounded-xl border border-forest-200 bg-white px-4 text-xs font-bold text-forest-800 transition hover:bg-forest-50"
-            >
-              Continue as demo user
-            </button>
-          </div>
-
-          {/* forgot password dialog (UI only) */}
-          {forgotOpen && (
-            <div
-              className="fixed inset-0 z-[70] flex items-center justify-center bg-forest-950/30 p-4 backdrop-blur-sm"
-              role="dialog"
-              aria-modal="true"
-              aria-label="Reset password"
-              onClick={() => setForgotOpen(false)}
-            >
-              <motion.div
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-glass"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <h3 className="text-lg font-bold text-charcoal">Reset your password</h3>
-                <p className="mt-1.5 text-sm text-graymute">
-                  Enter your account email and we&apos;ll send a reset link (simulated — nothing is actually sent).
-                </p>
-                <input
-                  type="email"
-                  value={forgotEmail}
-                  onChange={(e) => setForgotEmail(e.target.value)}
-                  placeholder="you@example.com"
-                  className="mt-4 h-11 w-full rounded-xl border border-forest-100 px-3.5 text-sm outline-none focus:border-forest-300 focus:ring-2 focus:ring-forest-200"
-                />
-                <div className="mt-5 flex gap-2.5">
-                  <button
-                    onClick={() => setForgotOpen(false)}
-                    className="h-11 flex-1 rounded-xl border border-forest-200 text-sm font-semibold text-charcoal transition hover:bg-soft"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={() => {
-                      setForgotOpen(false);
-                      toast({
-                        title: "Reset link sent (simulated)",
-                        description: `If ${forgotEmail || "that email"} exists, a reset link is on its way.`,
-                      });
-                    }}
-                    className="h-11 flex-1 rounded-xl bg-forest-900 text-sm font-bold text-white transition hover:bg-forest-800"
-                  >
-                    Send link
-                  </button>
-                </div>
-              </motion.div>
-            </div>
           )}
+          <p className="mt-5 text-center text-xs leading-relaxed text-graymute">
+            Passwords are sent only to our secure server connection and are never saved in this browser.
+          </p>
         </motion.div>
       </div>
     </div>
