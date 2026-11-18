@@ -5,6 +5,7 @@ import {
   hasSameOrigin,
   readJsonBody,
 } from "@/lib/prestashop-app-api";
+import { validateAddressFields } from "@/lib/validation";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -20,8 +21,22 @@ export async function PATCH(request: Request, context: RouteContext) {
     const { id } = await context.params;
     if (!validAddressId(id)) throw new CustomerApiError("invalid_input");
     const body = await readJsonBody(request);
+    const isDefaultOnly =
+      Object.keys(body).length === 1 && typeof body.isDefault === "boolean";
+    let validatedPatch: Record<string, unknown> = body;
+    if (!isDefaultOnly) {
+      const check = validateAddressFields(body);
+      if (!check.ok) {
+        const firstError = Object.values(check.errors)[0] ?? "Check the address details and try again.";
+        return Response.json(
+          { success: false, code: "invalid_input", message: firstError, errors: check.errors },
+          { status: 400, headers: { "Cache-Control": "no-store" } },
+        );
+      }
+      validatedPatch = { ...body, ...check.values };
+    }
     const result = await callAuthenticatedPrestaShopApp(request, "addresses:update", {
-      ...body,
+      ...validatedPatch,
       id,
     });
     return Response.json(result, { headers: { "Cache-Control": "no-store" } });

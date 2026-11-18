@@ -20,6 +20,7 @@ import { formatPrice } from "@/utils/format";
 import { cn } from "@/lib/utils";
 import type { Address } from "@/types";
 import { parseCustomerOrder } from "@/lib/customer-order";
+import { INDIAN_STATES, validateAddressFields } from "@/lib/validation";
 
 function StepHeader({ n, title, hint }: { n: number; title: string; hint?: string }) {
   return (
@@ -43,11 +44,13 @@ function Field({
   children,
   error,
   htmlFor,
+  errorId,
 }: {
   label: string;
   children: React.ReactNode;
   error?: string;
   htmlFor?: string;
+  errorId?: string;
 }) {
   return (
     <div>
@@ -56,7 +59,7 @@ function Field({
       </label>
       {children}
       {error && (
-        <p className="mt-1 text-[11px] font-medium text-red-600" role="alert">
+        <p id={errorId} className="mt-1 text-[11px] font-medium text-red-600" role="alert">
           {error}
         </p>
       )}
@@ -126,35 +129,41 @@ export function CheckoutForm() {
     }
   }, [quote, quoteKey]);
 
-  const validateNewAddress = () => {
-    const errs: Record<string, string> = {};
-    if (newAddr.name.trim().split(/\s+/).length < 2) errs.name = "Enter your first and last name.";
-    if (!/^[+\d][\d\s()-]{7,17}$/.test(newAddr.phone.trim())) errs.phone = "Enter a valid phone number.";
-    if (newAddr.line1.trim().length < 5) errs.line1 = "Address line 1 is required.";
-    if (newAddr.city.trim().length < 2) errs.city = "City is required.";
-    if (newAddr.state.trim().length < 2) errs.state = "State is required.";
-    if (!/^\d{6}$/.test(newAddr.pincode.trim())) errs.pincode = "Enter a 6-digit PIN code.";
-    setAddrErrors(errs);
-    return Object.keys(errs).length === 0;
+  const validateNewAddressField = (field: keyof typeof newAddr, nextDraft: typeof newAddr) => {
+    const check = validateAddressFields(nextDraft);
+    setAddrErrors((prev) => {
+      const next = { ...prev };
+      if (check.errors[field]) next[field] = check.errors[field];
+      else delete next[field];
+      return next;
+    });
   };
 
   const saveNewAddress = async () => {
-    if (!validateNewAddress()) return;
+    const check = validateAddressFields(newAddr);
+    setAddrErrors(check.errors);
+    if (!check.ok) {
+      const order = ["name", "phone", "line1", "line2", "city", "state", "pincode", "label"];
+      const firstKey = order.find((k) => check.errors[k]);
+      if (firstKey) document.getElementById(`co-addr-${firstKey}`)?.focus();
+      return;
+    }
     try {
       const created = await addAddress({
-        label: newAddr.label,
-        name: newAddr.name,
-        phone: newAddr.phone,
-        line1: newAddr.line1,
-        line2: newAddr.line2 || undefined,
-        city: newAddr.city,
-        state: newAddr.state,
-        pincode: newAddr.pincode,
-        type: newAddr.label.toLowerCase() as Address["type"],
+        label: check.values.label,
+        name: check.values.name,
+        phone: check.values.phone,
+        line1: check.values.line1,
+        line2: check.values.line2 || undefined,
+        city: check.values.city,
+        state: check.values.state,
+        pincode: check.values.pincode,
+        type: check.values.label.toLowerCase() as Address["type"],
         isDefault: addresses.length === 0,
       });
       setSelectedAddressId(created.id);
       setQuote(null);
+      setAddrErrors({});
       setShowNewAddress(false);
       toast({ title: "Address saved to your PrestaShop account." });
     } catch (error) {
@@ -402,29 +411,139 @@ export function CheckoutForm() {
               className="mt-4 overflow-hidden"
             >
               <div className="grid gap-4 rounded-2xl bg-soft/60 p-4 sm:grid-cols-2">
-                <Field label="Full name" error={addrErrors.name}>
-                  <input className={cn(inputCls, addrErrors.name && "border-red-300")} value={newAddr.name} onChange={(e) => setNewAddr({ ...newAddr, name: e.target.value })} />
+                <Field label="Full name *" htmlFor="co-addr-name" error={addrErrors.name} errorId="co-addr-name-err">
+                  <input
+                    id="co-addr-name"
+                    maxLength={80}
+                    autoComplete="name"
+                    aria-invalid={Boolean(addrErrors.name)}
+                    aria-describedby={addrErrors.name ? "co-addr-name-err" : undefined}
+                    className={cn(inputCls, addrErrors.name && "border-red-400 focus:border-red-400 focus:ring-red-200")}
+                    value={newAddr.name}
+                    onChange={(e) => {
+                      const next = { ...newAddr, name: e.target.value };
+                      setNewAddr(next);
+                      if (addrErrors.name) validateNewAddressField("name", next);
+                    }}
+                    onBlur={() => validateNewAddressField("name", newAddr)}
+                  />
                 </Field>
-                <Field label="Phone" error={addrErrors.phone}>
-                  <input className={cn(inputCls, addrErrors.phone && "border-red-300")} value={newAddr.phone} onChange={(e) => setNewAddr({ ...newAddr, phone: e.target.value })} inputMode="tel" />
+                <Field label="Mobile number *" htmlFor="co-addr-phone" error={addrErrors.phone} errorId="co-addr-phone-err">
+                  <input
+                    id="co-addr-phone"
+                    type="tel"
+                    inputMode="numeric"
+                    maxLength={10}
+                    autoComplete="tel-national"
+                    placeholder="9876543210"
+                    aria-invalid={Boolean(addrErrors.phone)}
+                    aria-describedby={addrErrors.phone ? "co-addr-phone-err" : undefined}
+                    className={cn(inputCls, addrErrors.phone && "border-red-400 focus:border-red-400 focus:ring-red-200")}
+                    value={newAddr.phone}
+                    onChange={(e) => {
+                      const next = { ...newAddr, phone: e.target.value };
+                      setNewAddr(next);
+                      if (addrErrors.phone) validateNewAddressField("phone", next);
+                    }}
+                    onBlur={() => validateNewAddressField("phone", newAddr)}
+                  />
                 </Field>
-                <Field label="Address line 1" error={addrErrors.line1}>
-                  <input className={cn(inputCls, addrErrors.line1 && "border-red-300")} value={newAddr.line1} onChange={(e) => setNewAddr({ ...newAddr, line1: e.target.value })} placeholder="Flat / House no, Street" />
+                <Field label="Address line 1 *" htmlFor="co-addr-line1" error={addrErrors.line1} errorId="co-addr-line1-err">
+                  <input
+                    id="co-addr-line1"
+                    maxLength={150}
+                    autoComplete="address-line1"
+                    placeholder="Flat / House no, Street"
+                    aria-invalid={Boolean(addrErrors.line1)}
+                    aria-describedby={addrErrors.line1 ? "co-addr-line1-err" : undefined}
+                    className={cn(inputCls, addrErrors.line1 && "border-red-400 focus:border-red-400 focus:ring-red-200")}
+                    value={newAddr.line1}
+                    onChange={(e) => {
+                      const next = { ...newAddr, line1: e.target.value };
+                      setNewAddr(next);
+                      if (addrErrors.line1) validateNewAddressField("line1", next);
+                    }}
+                    onBlur={() => validateNewAddressField("line1", newAddr)}
+                  />
                 </Field>
-                <Field label="Address line 2 (optional)">
-                  <input className={inputCls} value={newAddr.line2} onChange={(e) => setNewAddr({ ...newAddr, line2: e.target.value })} placeholder="Area, Landmark" />
+                <Field label="Address line 2 (optional)" htmlFor="co-addr-line2" error={addrErrors.line2} errorId="co-addr-line2-err">
+                  <input
+                    id="co-addr-line2"
+                    maxLength={150}
+                    autoComplete="address-line2"
+                    placeholder="Area, Landmark"
+                    aria-invalid={Boolean(addrErrors.line2)}
+                    aria-describedby={addrErrors.line2 ? "co-addr-line2-err" : undefined}
+                    className={cn(inputCls, addrErrors.line2 && "border-red-400 focus:border-red-400 focus:ring-red-200")}
+                    value={newAddr.line2}
+                    onChange={(e) => {
+                      const next = { ...newAddr, line2: e.target.value };
+                      setNewAddr(next);
+                      if (addrErrors.line2) validateNewAddressField("line2", next);
+                    }}
+                    onBlur={() => validateNewAddressField("line2", newAddr)}
+                  />
                 </Field>
-                <Field label="City" error={addrErrors.city}>
-                  <input className={cn(inputCls, addrErrors.city && "border-red-300")} value={newAddr.city} onChange={(e) => setNewAddr({ ...newAddr, city: e.target.value })} />
+                <Field label="City *" htmlFor="co-addr-city" error={addrErrors.city} errorId="co-addr-city-err">
+                  <input
+                    id="co-addr-city"
+                    maxLength={60}
+                    autoComplete="address-level2"
+                    aria-invalid={Boolean(addrErrors.city)}
+                    aria-describedby={addrErrors.city ? "co-addr-city-err" : undefined}
+                    className={cn(inputCls, addrErrors.city && "border-red-400 focus:border-red-400 focus:ring-red-200")}
+                    value={newAddr.city}
+                    onChange={(e) => {
+                      const next = { ...newAddr, city: e.target.value };
+                      setNewAddr(next);
+                      if (addrErrors.city) validateNewAddressField("city", next);
+                    }}
+                    onBlur={() => validateNewAddressField("city", newAddr)}
+                  />
                 </Field>
-                <Field label="State" error={addrErrors.state}>
-                  <input className={cn(inputCls, addrErrors.state && "border-red-300")} value={newAddr.state} onChange={(e) => setNewAddr({ ...newAddr, state: e.target.value })} />
-                </Field>
-                <Field label="PIN code" error={addrErrors.pincode}>
-                  <input className={cn(inputCls, addrErrors.pincode && "border-red-300")} value={newAddr.pincode} onChange={(e) => setNewAddr({ ...newAddr, pincode: e.target.value })} inputMode="numeric" maxLength={6} placeholder="560102" />
-                </Field>
-                <Field label="Save as">
+                <Field label="State / UT *" htmlFor="co-addr-state" error={addrErrors.state} errorId="co-addr-state-err">
                   <select
+                    id="co-addr-state"
+                    autoComplete="address-level1"
+                    aria-invalid={Boolean(addrErrors.state)}
+                    aria-describedby={addrErrors.state ? "co-addr-state-err" : undefined}
+                    className={cn(inputCls, addrErrors.state && "border-red-400 focus:border-red-400 focus:ring-red-200")}
+                    value={newAddr.state}
+                    onChange={(e) => {
+                      const next = { ...newAddr, state: e.target.value };
+                      setNewAddr(next);
+                      validateNewAddressField("state", next);
+                    }}
+                    onBlur={() => validateNewAddressField("state", newAddr)}
+                  >
+                    <option value="">Select state or UT</option>
+                    {INDIAN_STATES.map((st) => (
+                      <option key={st} value={st}>{st}</option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="PIN code *" htmlFor="co-addr-pincode" error={addrErrors.pincode} errorId="co-addr-pincode-err">
+                  <input
+                    id="co-addr-pincode"
+                    inputMode="numeric"
+                    maxLength={6}
+                    autoComplete="postal-code"
+                    placeholder="560102"
+                    aria-invalid={Boolean(addrErrors.pincode)}
+                    aria-describedby={addrErrors.pincode ? "co-addr-pincode-err" : undefined}
+                    className={cn(inputCls, addrErrors.pincode && "border-red-400 focus:border-red-400 focus:ring-red-200")}
+                    value={newAddr.pincode}
+                    onChange={(e) => {
+                      const next = { ...newAddr, pincode: e.target.value };
+                      setNewAddr(next);
+                      if (addrErrors.pincode) validateNewAddressField("pincode", next);
+                    }}
+                    onBlur={() => validateNewAddressField("pincode", newAddr)}
+                  />
+                </Field>
+                <Field label="Save as *" htmlFor="co-addr-label" error={addrErrors.label} errorId="co-addr-label-err">
+                  <select
+                    id="co-addr-label"
                     className={inputCls}
                     value={newAddr.label}
                     onChange={(e) => setNewAddr({ ...newAddr, label: e.target.value })}
@@ -435,10 +554,10 @@ export function CheckoutForm() {
                   </select>
                 </Field>
                 <div className="flex items-end gap-2">
-                  <button onClick={saveNewAddress} className="h-11 flex-1 rounded-xl bg-forest-900 text-sm font-bold text-white transition hover:bg-forest-800">
+                  <button type="button" onClick={saveNewAddress} className="h-11 flex-1 rounded-xl bg-forest-900 text-sm font-bold text-white transition hover:bg-forest-800">
                     Save address
                   </button>
-                  <button onClick={() => setShowNewAddress(false)} className="h-11 rounded-xl border border-forest-200 px-4 text-sm font-semibold text-charcoal transition hover:bg-soft">
+                  <button type="button" onClick={() => { setShowNewAddress(false); setAddrErrors({}); }} className="h-11 rounded-xl border border-forest-200 px-4 text-sm font-semibold text-charcoal transition hover:bg-soft">
                     Cancel
                   </button>
                 </div>

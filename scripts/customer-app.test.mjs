@@ -893,4 +893,105 @@ test("PrestaShop module v1.3.0 includes farm directory and support:reply actions
   assert.match(apiPhp, /case 'farms:list':/);
   assert.match(apiPhp, /case 'farms:get':/);
   assert.match(apiPhp, /case 'support:reply':/);
+  assert.match(apiPhp, /\^\[6-9\]\\d\{9\}\$/);
+  assert.match(apiPhp, /\^\[1-9\]\\d\{5\}\$/);
+});
+
+test("Indian mobile number validation accepts only 10 digits starting with 6-9", async () => {
+  const { validateIndianMobile } = await import("../src/lib/validation.ts");
+
+  assert.equal(validateIndianMobile("9876543210").ok, true);
+  assert.equal(validateIndianMobile("6123456789").ok, true);
+
+  for (const bad of [
+    "5123456789",
+    "987654321",
+    "98765432101",
+    "987654321012",
+    "98abcdefgh",
+    "98765 43210",
+    "+919876543210",
+    "",
+    "   ",
+  ]) {
+    assert.equal(validateIndianMobile(bad).ok, false, `Expected phone "${bad}" to be rejected`);
+  }
+});
+
+test("Indian PIN code validation accepts 6 digits not starting with 0", async () => {
+  const { validateIndianPincode } = await import("../src/lib/validation.ts");
+
+  assert.equal(validateIndianPincode("641035").ok, true);
+
+  for (const bad of ["012345", "64103", "6410357", "64A035", "641 035", "", "   "]) {
+    assert.equal(validateIndianPincode(bad).ok, false, `Expected PIN "${bad}" to be rejected`);
+  }
+});
+
+test("address, name, email, and password validation enforce length, format, and independent phone numbers", async () => {
+  const {
+    validateAddressFields,
+    validateEmail,
+    validatePassword,
+    validatePersonName,
+  } = await import("../src/lib/validation.ts");
+
+  assert.equal(validatePersonName("Ananya-Rao O'Connor", { requireFullName: true }).ok, true);
+  assert.equal(validatePersonName("Suresh123", { requireFullName: false }).ok, false);
+  assert.equal(validatePersonName("   ", { requireFullName: true }).ok, false);
+
+  assert.equal(validateEmail("  buyer@example.com ").ok, true);
+  assert.equal(validateEmail("bad email@example.com").ok, false);
+
+  assert.equal(validatePassword("ValidPass123").ok, true);
+  assert.equal(validatePassword("short").ok, false);
+  assert.equal(validatePassword("a".repeat(73)).ok, false);
+
+  // Optional line2 empty is accepted, and delivery phone can differ from profile phone
+  const validAddr = validateAddressFields({
+    label: "Home",
+    name: "Ramesh Gowda",
+    phone: "9876543210",
+    line1: "42, 3rd Cross, HSR Layout",
+    line2: "",
+    city: "Bengaluru",
+    state: "Karnataka",
+    pincode: "560102",
+  });
+  assert.equal(validAddr.ok, true);
+
+  // Reject >10-digit phone, 0-prefixed PIN, whitespace-only fields, and max-length violations
+  const invalidAddr = validateAddressFields({
+    label: "H",
+    name: "   ",
+    phone: "987654321012",
+    line1: "123",
+    line2: "x".repeat(151),
+    city: "B",
+    state: "InvalidState",
+    pincode: "012345",
+  });
+  assert.equal(invalidAddr.ok, false);
+  for (const key of ["label", "name", "phone", "line1", "line2", "city", "state", "pincode"]) {
+    assert.ok(invalidAddr.errors[key], `Expected error for ${key}`);
+  }
+});
+
+test("customer API routes enforce centralized validation helpers before calling PrestaShop", () => {
+  const addrPost = readFileSync(new URL("../src/app/api/customer/addresses/route.ts", import.meta.url), "utf8");
+  const addrPatch = readFileSync(new URL("../src/app/api/customer/addresses/[id]/route.ts", import.meta.url), "utf8");
+  const profilePatch = readFileSync(new URL("../src/app/api/customer/profile/route.ts", import.meta.url), "utf8");
+  const regPost = readFileSync(new URL("../src/app/api/customer/auth/register/route.ts", import.meta.url), "utf8");
+  const loginPost = readFileSync(new URL("../src/app/api/customer/auth/login/route.ts", import.meta.url), "utf8");
+  const resetPost = readFileSync(new URL("../src/app/api/customer/auth/password-reset/route.ts", import.meta.url), "utf8");
+
+  assert.match(addrPost, /validateAddressFields/);
+  assert.match(addrPatch, /validateAddressFields/);
+  assert.match(profilePatch, /validateIndianMobile/);
+  assert.match(profilePatch, /validatePersonName/);
+  assert.match(regPost, /validatePersonName/);
+  assert.match(regPost, /validateEmail/);
+  assert.match(regPost, /validatePassword/);
+  assert.match(loginPost, /validateEmail/);
+  assert.match(resetPost, /validateEmail/);
 });

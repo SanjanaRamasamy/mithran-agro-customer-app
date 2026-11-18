@@ -2,24 +2,38 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { validateEmail } from "@/lib/validation";
+import { cn } from "@/lib/utils";
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
+  const [fieldError, setFieldError] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+
+  const checkEmail = (val: string) => {
+    const res = validateEmail(val);
+    setFieldError(res.ok ? "" : (res.error ?? "Enter a valid email address."));
+    return res;
+  };
 
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setMessage("");
     setError("");
+    const check = checkEmail(email);
+    if (!check.ok) {
+      document.getElementById("reset-email")?.focus();
+      return;
+    }
     setSubmitting(true);
     try {
       const response = await fetch("/api/customer/auth/password-reset", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         cache: "no-store",
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ email: check.value }),
       });
       const payload: unknown = await response.json();
       if (
@@ -59,21 +73,32 @@ export default function ForgotPasswordPage() {
           Enter your store-account email. PrestaShop will email its native password-reset link
           if the account is active and eligible for a reset.
         </p>
-        <form onSubmit={submit} className="mt-6 space-y-4">
+        <form onSubmit={submit} noValidate className="mt-6 space-y-4">
           <div>
             <label htmlFor="reset-email" className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-graymute">
-              Email address
+              Email address *
             </label>
             <input
               id="reset-email"
               type="email"
               autoComplete="email"
+              placeholder="you@example.com"
               required
               maxLength={254}
               value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              className="h-11 w-full rounded-xl border border-forest-100 bg-white px-3.5 text-sm text-charcoal outline-none focus:border-forest-300 focus:ring-2 focus:ring-forest-200"
+              aria-invalid={Boolean(fieldError)}
+              aria-describedby={fieldError ? "reset-email-err" : undefined}
+              onChange={(event) => {
+                setEmail(event.target.value);
+                if (fieldError) checkEmail(event.target.value);
+              }}
+              onBlur={() => checkEmail(email)}
+              className={cn(
+                "h-11 w-full rounded-xl border border-forest-100 bg-white px-3.5 text-sm text-charcoal outline-none focus:border-forest-300 focus:ring-2 focus:ring-forest-200",
+                fieldError && "border-red-400 focus:border-red-400 focus:ring-red-200",
+              )}
             />
+            {fieldError && <p id="reset-email-err" role="alert" className="mt-1 text-xs font-medium text-red-600">{fieldError}</p>}
           </div>
           <button
             type="submit"

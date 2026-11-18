@@ -6,6 +6,7 @@ import { motion } from "framer-motion";
 import { Clock, Mail, MapPin, Phone, Send } from "lucide-react";
 import { SITE } from "@/config/site";
 import { useToast } from "@/contexts/NotificationContext";
+import { validateEmail, validatePersonName, validateTextLength } from "@/lib/validation";
 
 /**
  * Contact page — support channels plus a fully simulated enquiry form
@@ -24,11 +25,12 @@ export default function ContactPage() {
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     const next: Record<string, string> = {};
-    if (name.trim().length < 2) next.name = "Please tell us your name";
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()))
-      next.email = "Enter a valid email address";
-    if (message.trim().length < 10)
-      next.message = "Message should be at least 10 characters";
+    const nameRes = validatePersonName(name, { min: 2, max: 80, label: "Your name" });
+    if (!nameRes.ok && nameRes.error) next.name = nameRes.error;
+    const emailRes = validateEmail(email);
+    if (!emailRes.ok && emailRes.error) next.email = emailRes.error;
+    const msgRes = validateTextLength(message, { min: 10, max: 2000, label: "Message" });
+    if (!msgRes.ok && msgRes.error) next.message = msgRes.error;
     setErrors(next);
     if (Object.keys(next).length > 0) return;
 

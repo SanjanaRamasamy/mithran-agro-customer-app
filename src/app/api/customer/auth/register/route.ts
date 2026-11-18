@@ -7,6 +7,7 @@ import {
   readJsonBody,
   setCustomerSessionCookie,
 } from "@/lib/prestashop-app-api";
+import { validateEmail, validatePassword, validatePersonName } from "@/lib/validation";
 
 interface RegistrationResult {
   success: true;
@@ -28,10 +29,24 @@ export async function POST(request: Request) {
     ) {
       throw new CustomerApiError("invalid_input");
     }
+    const nameCheck = validatePersonName(body.name, { min: 2, max: 80, requireFullName: true, label: "Full name" });
+    const emailCheck = validateEmail(body.email);
+    const passwordCheck = validatePassword(body.password);
+    const errors: Record<string, string> = {};
+    if (!nameCheck.ok && nameCheck.error) errors.name = nameCheck.error;
+    if (!emailCheck.ok && emailCheck.error) errors.email = emailCheck.error;
+    if (!passwordCheck.ok && passwordCheck.error) errors.password = passwordCheck.error;
+    if (Object.keys(errors).length > 0) {
+      const firstError = Object.values(errors)[0] ?? "Check the information and try again.";
+      return Response.json(
+        { success: false, code: "invalid_input", message: firstError, errors },
+        { status: 400, headers: { "Cache-Control": "no-store" } },
+      );
+    }
     const result = await callPrestaShopApp<RegistrationResult>("register", {
-      name: body.name,
-      email: body.email,
-      password: body.password,
+      name: nameCheck.value,
+      email: emailCheck.value,
+      password: passwordCheck.value,
     });
     if (!result.success || !/^[A-Fa-f0-9]{64,128}$/.test(result.token)) {
       throw new CustomerApiError("unavailable");

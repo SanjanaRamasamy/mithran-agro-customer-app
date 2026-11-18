@@ -6,6 +6,8 @@ import { ProtectedRoute } from "@/components/auth/protected-route";
 import { EmptyState } from "@/components/ui/empty-state";
 import { useToast } from "@/contexts/NotificationContext";
 import { formatDateTime } from "@/utils/format";
+import { validateTextLength } from "@/lib/validation";
+import { cn } from "@/lib/utils";
 
 interface TicketMessage {
   id: string;
@@ -50,6 +52,7 @@ function SupportContent() {
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
   const [subject, setSubject] = useState("");
   const [message, setMessage] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<{ subject?: string; message?: string }>({});
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
@@ -102,9 +105,33 @@ function SupportContent() {
     void loadTickets();
   };
 
+  const validateSupportField = (field: "subject" | "message", value: string) => {
+    const res =
+      field === "subject"
+        ? validateTextLength(value, { min: 4, max: 120, label: "Subject" })
+        : validateTextLength(value, { min: 10, max: 4000, label: "Message" });
+    setFieldErrors((prev) => {
+      const next = { ...prev };
+      if (res.ok) delete next[field];
+      else if (res.error) next[field] = res.error;
+      return next;
+    });
+    return res;
+  };
+
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (submitting) return;
+    const subjRes = validateTextLength(subject, { min: 4, max: 120, label: "Subject" });
+    const msgRes = validateTextLength(message, { min: 10, max: 4000, label: "Message" });
+    const nextErrs: { subject?: string; message?: string } = {};
+    if (!subjRes.ok && subjRes.error) nextErrs.subject = subjRes.error;
+    if (!msgRes.ok && msgRes.error) nextErrs.message = msgRes.error;
+    setFieldErrors(nextErrs);
+    if (Object.keys(nextErrs).length > 0) {
+      document.getElementById(nextErrs.subject ? "support-subject" : "support-message")?.focus();
+      return;
+    }
     setSubmitting(true);
     setError("");
     try {
@@ -174,31 +201,49 @@ function SupportContent() {
     <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
       <h1 className="text-2xl font-extrabold text-charcoal">Customer support</h1>
       <p className="mt-1 text-sm text-graymute">Your requests are saved to your PrestaShop customer account.</p>
-      <form onSubmit={submit} className="mt-6 space-y-4 rounded-2xl border border-forest-100 bg-white p-5 shadow-soft">
+      <form onSubmit={submit} noValidate className="mt-6 space-y-4 rounded-2xl border border-forest-100 bg-white p-5 shadow-soft">
         <div>
-          <label htmlFor="support-subject" className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-graymute">Subject</label>
+          <label htmlFor="support-subject" className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-graymute">Subject *</label>
           <input
             id="support-subject"
             required
-            minLength={4}
             maxLength={120}
             value={subject}
-            onChange={(event) => setSubject(event.target.value)}
-            className="h-11 w-full rounded-xl border border-forest-100 px-3.5 text-sm outline-none focus:border-forest-300"
+            aria-invalid={Boolean(fieldErrors.subject)}
+            aria-describedby={fieldErrors.subject ? "support-subject-err" : undefined}
+            onChange={(event) => {
+              setSubject(event.target.value);
+              if (fieldErrors.subject) validateSupportField("subject", event.target.value);
+            }}
+            onBlur={() => validateSupportField("subject", subject)}
+            className={cn(
+              "h-11 w-full rounded-xl border border-forest-100 px-3.5 text-sm outline-none focus:border-forest-300",
+              fieldErrors.subject && "border-red-400 focus:border-red-400",
+            )}
           />
+          {fieldErrors.subject && <p id="support-subject-err" role="alert" className="mt-1 text-xs font-medium text-red-600">{fieldErrors.subject}</p>}
         </div>
         <div>
-          <label htmlFor="support-message" className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-graymute">How can we help?</label>
+          <label htmlFor="support-message" className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-graymute">How can we help? *</label>
           <textarea
             id="support-message"
             required
-            minLength={10}
             maxLength={4000}
             rows={5}
             value={message}
-            onChange={(event) => setMessage(event.target.value)}
-            className="w-full rounded-xl border border-forest-100 p-3.5 text-sm outline-none focus:border-forest-300"
+            aria-invalid={Boolean(fieldErrors.message)}
+            aria-describedby={fieldErrors.message ? "support-message-err" : undefined}
+            onChange={(event) => {
+              setMessage(event.target.value);
+              if (fieldErrors.message) validateSupportField("message", event.target.value);
+            }}
+            onBlur={() => validateSupportField("message", message)}
+            className={cn(
+              "w-full rounded-xl border border-forest-100 p-3.5 text-sm outline-none focus:border-forest-300",
+              fieldErrors.message && "border-red-400 focus:border-red-400",
+            )}
           />
+          {fieldErrors.message && <p id="support-message-err" role="alert" className="mt-1 text-xs font-medium text-red-600">{fieldErrors.message}</p>}
         </div>
         <button
           type="submit"

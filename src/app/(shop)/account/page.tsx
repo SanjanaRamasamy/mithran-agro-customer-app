@@ -28,6 +28,12 @@ import { RelativeTime } from "@/components/ui/relative-time";
 import { formatDate } from "@/utils/format";
 import { cn } from "@/lib/utils";
 import { ProtectedRoute } from "@/components/auth/protected-route";
+import {
+  INDIAN_STATES,
+  validateAddressFields,
+  validateIndianMobile,
+  validatePersonName,
+} from "@/lib/validation";
 import type { Address, User as CustomerUser } from "@/types";
 
 const TABS = [
@@ -66,14 +72,40 @@ function ProfileForm({
   const { toast } = useToast();
   const [name, setName] = useState(user.name);
   const [phone, setPhone] = useState(user.phone);
+  const [errors, setErrors] = useState<{ name?: string; phone?: string }>({});
   const [saving, setSaving] = useState(false);
+
+  const validateField = (field: "name" | "phone", value: string) => {
+    const res =
+      field === "name"
+        ? validatePersonName(value, { min: 2, max: 80, requireFullName: true, label: "Full name" })
+        : validateIndianMobile(value);
+    setErrors((prev) => {
+      const next = { ...prev };
+      if (res.ok) delete next[field];
+      else if (res.error) next[field] = res.error;
+      return next;
+    });
+    return res;
+  };
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (saving) return;
+    const nameRes = validatePersonName(name, { min: 2, max: 80, requireFullName: true, label: "Full name" });
+    const phoneRes = validateIndianMobile(phone);
+    const nextErrors: { name?: string; phone?: string } = {};
+    if (!nameRes.ok && nameRes.error) nextErrors.name = nameRes.error;
+    if (!phoneRes.ok && phoneRes.error) nextErrors.phone = phoneRes.error;
+    setErrors(nextErrors);
+    if (Object.keys(nextErrors).length > 0) {
+      const firstId = nextErrors.name ? "pf-name" : "pf-phone";
+      document.getElementById(firstId)?.focus();
+      return;
+    }
     setSaving(true);
     try {
-      await onSave({ name, phone });
+      await onSave({ name: nameRes.value, phone: phoneRes.value });
       toast({ title: "Profile updated." });
     } catch (error) {
       toast({ kind: "error", title: error instanceof Error ? error.message : "Unable to update your profile." });
@@ -83,17 +115,52 @@ function ProfileForm({
   };
 
   return (
-    <form onSubmit={submit} aria-label="Edit profile" className="rounded-2xl border border-forest-50 bg-white p-5 shadow-soft sm:p-6">
+    <form onSubmit={submit} noValidate aria-label="Edit profile" className="rounded-2xl border border-forest-50 bg-white p-5 shadow-soft sm:p-6">
       <h2 className="text-base font-bold text-charcoal">Personal information</h2>
       <p className="mt-0.5 text-xs text-graymute">Your name and phone number are saved to your PrestaShop customer profile.</p>
       <div className="mt-4 grid gap-4 sm:grid-cols-2">
         <div>
-          <label htmlFor="pf-name" className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-graymute">Full name</label>
-          <input id="pf-name" required minLength={2} maxLength={128} className={inputCls} value={name} onChange={(event) => setName(event.target.value)} />
+          <label htmlFor="pf-name" className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-graymute">Full name *</label>
+          <input
+            id="pf-name"
+            required
+            maxLength={80}
+            autoComplete="name"
+            aria-invalid={Boolean(errors.name)}
+            aria-describedby={errors.name ? "pf-name-err" : undefined}
+            className={cn(inputCls, errors.name && "border-red-400 focus:border-red-400 focus:ring-red-200")}
+            value={name}
+            onChange={(event) => {
+              const v = event.target.value;
+              setName(v);
+              if (errors.name) validateField("name", v);
+            }}
+            onBlur={() => validateField("name", name)}
+          />
+          {errors.name && <p id="pf-name-err" role="alert" className="mt-1 text-xs font-medium text-red-600">{errors.name}</p>}
         </div>
         <div>
-          <label htmlFor="pf-phone" className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-graymute">Phone</label>
-          <input id="pf-phone" type="tel" maxLength={32} className={inputCls} value={phone} onChange={(event) => setPhone(event.target.value)} />
+          <label htmlFor="pf-phone" className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-graymute">Mobile number *</label>
+          <input
+            id="pf-phone"
+            type="tel"
+            inputMode="numeric"
+            required
+            maxLength={10}
+            autoComplete="tel-national"
+            placeholder="9876543210"
+            aria-invalid={Boolean(errors.phone)}
+            aria-describedby={errors.phone ? "pf-phone-err" : undefined}
+            className={cn(inputCls, errors.phone && "border-red-400 focus:border-red-400 focus:ring-red-200")}
+            value={phone}
+            onChange={(event) => {
+              const v = event.target.value;
+              setPhone(v);
+              if (errors.phone) validateField("phone", v);
+            }}
+            onBlur={() => validateField("phone", phone)}
+          />
+          {errors.phone && <p id="pf-phone-err" role="alert" className="mt-1 text-xs font-medium text-red-600">{errors.phone}</p>}
         </div>
         <div className="sm:col-span-2">
           <label htmlFor="pf-email" className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-graymute">Email</label>
@@ -121,24 +188,54 @@ function AccountInner() {
   const { toast } = useToast();
 
   const [addressDraft, setAddressDraft] = useState<AddressDraft>(EMPTY_ADDRESS);
+  const [addressErrors, setAddressErrors] = useState<Record<string, string>>({});
+  const [addressSubmitError, setAddressSubmitError] = useState("");
   const [editingAddressId, setEditingAddressId] = useState<string | null>(null);
   const [addressSaving, setAddressSaving] = useState(false);
+
+  const validateSingleAddressField = (field: keyof AddressDraft, nextDraft: AddressDraft) => {
+    const check = validateAddressFields(nextDraft);
+    setAddressErrors((prev) => {
+      const next = { ...prev };
+      if (check.errors[field]) next[field] = check.errors[field];
+      else delete next[field];
+      return next;
+    });
+  };
 
   const saveAddress = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (addressSaving) return;
+    setAddressSubmitError("");
+    const check = validateAddressFields(addressDraft);
+    setAddressErrors(check.errors);
+    if (!check.ok) {
+      const order = ["label", "name", "phone", "line1", "line2", "city", "state", "pincode"];
+      const firstKey = order.find((k) => check.errors[k]);
+      if (firstKey) document.getElementById(`addr-${firstKey}`)?.focus();
+      return;
+    }
     setAddressSaving(true);
     try {
+      const payload: AddressDraft = {
+        ...addressDraft,
+        ...check.values,
+        line2: check.values.line2 || undefined,
+      };
       if (editingAddressId) {
-        await updateAddress(editingAddressId, addressDraft);
+        await updateAddress(editingAddressId, payload);
       } else {
-        await addAddress(addressDraft);
+        await addAddress(payload);
       }
       setAddressDraft(EMPTY_ADDRESS);
+      setAddressErrors({});
+      setAddressSubmitError("");
       setEditingAddressId(null);
       toast({ title: editingAddressId ? "Address updated." : "Address saved to your account." });
     } catch (error) {
-      toast({ kind: "error", title: error instanceof Error ? error.message : "Unable to save address." });
+      const msg = error instanceof Error ? error.message : "Unable to save address.";
+      setAddressSubmitError(msg);
+      toast({ kind: "error", title: msg });
     } finally {
       setAddressSaving(false);
     }
@@ -245,26 +342,195 @@ function AccountInner() {
         {/* ADDRESSES */}
         {tab === "addresses" && (
           <section aria-label="Saved addresses" className="space-y-4">
-            <form onSubmit={saveAddress} className="grid gap-3 rounded-2xl border border-forest-100 bg-white p-5 shadow-soft sm:grid-cols-2">
+            <form onSubmit={saveAddress} noValidate className="grid gap-3 rounded-2xl border border-forest-100 bg-white p-5 shadow-soft sm:grid-cols-2">
               <h2 className="text-base font-bold text-charcoal sm:col-span-2">{editingAddressId ? "Edit delivery address" : "Add a delivery address"}</h2>
-              <input required minLength={2} maxLength={32} placeholder="Label (Home, Work…)" aria-label="Address label" className={inputCls} value={addressDraft.label} onChange={(event) => setAddressDraft({ ...addressDraft, label: event.target.value })} />
-              <input required minLength={3} maxLength={128} placeholder="Recipient full name" aria-label="Recipient full name" className={inputCls} value={addressDraft.name} onChange={(event) => setAddressDraft({ ...addressDraft, name: event.target.value })} />
-              <input required type="tel" placeholder="Phone number" aria-label="Phone number" className={inputCls} value={addressDraft.phone} onChange={(event) => setAddressDraft({ ...addressDraft, phone: event.target.value })} />
-              <input required minLength={3} maxLength={128} placeholder="Address line 1" aria-label="Address line 1" className={inputCls} value={addressDraft.line1} onChange={(event) => setAddressDraft({ ...addressDraft, line1: event.target.value })} />
-              <input maxLength={128} placeholder="Address line 2 (optional)" aria-label="Address line 2" className={inputCls} value={addressDraft.line2 ?? ""} onChange={(event) => setAddressDraft({ ...addressDraft, line2: event.target.value })} />
-              <input required minLength={2} maxLength={64} placeholder="City" aria-label="City" className={inputCls} value={addressDraft.city} onChange={(event) => setAddressDraft({ ...addressDraft, city: event.target.value })} />
-              <input required minLength={2} maxLength={64} placeholder="State (as configured in store)" aria-label="State" className={inputCls} value={addressDraft.state} onChange={(event) => setAddressDraft({ ...addressDraft, state: event.target.value })} />
-              <input required inputMode="numeric" pattern="[0-9]{6}" maxLength={6} placeholder="6-digit PIN code" aria-label="PIN code" className={inputCls} value={addressDraft.pincode} onChange={(event) => setAddressDraft({ ...addressDraft, pincode: event.target.value })} />
+              <div>
+                <label htmlFor="addr-label" className="mb-1 block text-xs font-bold uppercase tracking-wide text-graymute">Address label *</label>
+                <input
+                  id="addr-label"
+                  required
+                  maxLength={30}
+                  placeholder="Home, Work"
+                  aria-invalid={Boolean(addressErrors.label)}
+                  aria-describedby={addressErrors.label ? "addr-label-err" : undefined}
+                  className={cn(inputCls, addressErrors.label && "border-red-400 focus:border-red-400 focus:ring-red-200")}
+                  value={addressDraft.label}
+                  onChange={(event) => {
+                    const next = { ...addressDraft, label: event.target.value };
+                    setAddressDraft(next);
+                    if (addressErrors.label) validateSingleAddressField("label", next);
+                  }}
+                  onBlur={() => validateSingleAddressField("label", addressDraft)}
+                />
+                {addressErrors.label && <p id="addr-label-err" role="alert" className="mt-1 text-xs font-medium text-red-600">{addressErrors.label}</p>}
+              </div>
+              <div>
+                <label htmlFor="addr-name" className="mb-1 block text-xs font-bold uppercase tracking-wide text-graymute">Full name *</label>
+                <input
+                  id="addr-name"
+                  required
+                  maxLength={80}
+                  autoComplete="name"
+                  placeholder="Recipient full name"
+                  aria-invalid={Boolean(addressErrors.name)}
+                  aria-describedby={addressErrors.name ? "addr-name-err" : undefined}
+                  className={cn(inputCls, addressErrors.name && "border-red-400 focus:border-red-400 focus:ring-red-200")}
+                  value={addressDraft.name}
+                  onChange={(event) => {
+                    const next = { ...addressDraft, name: event.target.value };
+                    setAddressDraft(next);
+                    if (addressErrors.name) validateSingleAddressField("name", next);
+                  }}
+                  onBlur={() => validateSingleAddressField("name", addressDraft)}
+                />
+                {addressErrors.name && <p id="addr-name-err" role="alert" className="mt-1 text-xs font-medium text-red-600">{addressErrors.name}</p>}
+              </div>
+              <div>
+                <label htmlFor="addr-phone" className="mb-1 block text-xs font-bold uppercase tracking-wide text-graymute">Mobile number *</label>
+                <input
+                  id="addr-phone"
+                  type="tel"
+                  inputMode="numeric"
+                  required
+                  maxLength={10}
+                  autoComplete="tel-national"
+                  placeholder="9876543210"
+                  aria-invalid={Boolean(addressErrors.phone)}
+                  aria-describedby={addressErrors.phone ? "addr-phone-err" : undefined}
+                  className={cn(inputCls, addressErrors.phone && "border-red-400 focus:border-red-400 focus:ring-red-200")}
+                  value={addressDraft.phone}
+                  onChange={(event) => {
+                    const next = { ...addressDraft, phone: event.target.value };
+                    setAddressDraft(next);
+                    if (addressErrors.phone) validateSingleAddressField("phone", next);
+                  }}
+                  onBlur={() => validateSingleAddressField("phone", addressDraft)}
+                />
+                {addressErrors.phone && <p id="addr-phone-err" role="alert" className="mt-1 text-xs font-medium text-red-600">{addressErrors.phone}</p>}
+              </div>
+              <div>
+                <label htmlFor="addr-line1" className="mb-1 block text-xs font-bold uppercase tracking-wide text-graymute">Address line 1 *</label>
+                <input
+                  id="addr-line1"
+                  required
+                  maxLength={150}
+                  autoComplete="address-line1"
+                  placeholder="House/flat no., building, street"
+                  aria-invalid={Boolean(addressErrors.line1)}
+                  aria-describedby={addressErrors.line1 ? "addr-line1-err" : undefined}
+                  className={cn(inputCls, addressErrors.line1 && "border-red-400 focus:border-red-400 focus:ring-red-200")}
+                  value={addressDraft.line1}
+                  onChange={(event) => {
+                    const next = { ...addressDraft, line1: event.target.value };
+                    setAddressDraft(next);
+                    if (addressErrors.line1) validateSingleAddressField("line1", next);
+                  }}
+                  onBlur={() => validateSingleAddressField("line1", addressDraft)}
+                />
+                {addressErrors.line1 && <p id="addr-line1-err" role="alert" className="mt-1 text-xs font-medium text-red-600">{addressErrors.line1}</p>}
+              </div>
+              <div>
+                <label htmlFor="addr-line2" className="mb-1 block text-xs font-bold uppercase tracking-wide text-graymute">Address line 2 (optional)</label>
+                <input
+                  id="addr-line2"
+                  maxLength={150}
+                  autoComplete="address-line2"
+                  placeholder="Apartment, landmark, floor"
+                  aria-invalid={Boolean(addressErrors.line2)}
+                  aria-describedby={addressErrors.line2 ? "addr-line2-err" : undefined}
+                  className={cn(inputCls, addressErrors.line2 && "border-red-400 focus:border-red-400 focus:ring-red-200")}
+                  value={addressDraft.line2 ?? ""}
+                  onChange={(event) => {
+                    const next = { ...addressDraft, line2: event.target.value };
+                    setAddressDraft(next);
+                    if (addressErrors.line2) validateSingleAddressField("line2", next);
+                  }}
+                  onBlur={() => validateSingleAddressField("line2", addressDraft)}
+                />
+                {addressErrors.line2 && <p id="addr-line2-err" role="alert" className="mt-1 text-xs font-medium text-red-600">{addressErrors.line2}</p>}
+              </div>
+              <div>
+                <label htmlFor="addr-city" className="mb-1 block text-xs font-bold uppercase tracking-wide text-graymute">City *</label>
+                <input
+                  id="addr-city"
+                  required
+                  maxLength={60}
+                  autoComplete="address-level2"
+                  placeholder="Bengaluru"
+                  aria-invalid={Boolean(addressErrors.city)}
+                  aria-describedby={addressErrors.city ? "addr-city-err" : undefined}
+                  className={cn(inputCls, addressErrors.city && "border-red-400 focus:border-red-400 focus:ring-red-200")}
+                  value={addressDraft.city}
+                  onChange={(event) => {
+                    const next = { ...addressDraft, city: event.target.value };
+                    setAddressDraft(next);
+                    if (addressErrors.city) validateSingleAddressField("city", next);
+                  }}
+                  onBlur={() => validateSingleAddressField("city", addressDraft)}
+                />
+                {addressErrors.city && <p id="addr-city-err" role="alert" className="mt-1 text-xs font-medium text-red-600">{addressErrors.city}</p>}
+              </div>
+              <div>
+                <label htmlFor="addr-state" className="mb-1 block text-xs font-bold uppercase tracking-wide text-graymute">State / UT *</label>
+                <select
+                  id="addr-state"
+                  required
+                  autoComplete="address-level1"
+                  aria-invalid={Boolean(addressErrors.state)}
+                  aria-describedby={addressErrors.state ? "addr-state-err" : undefined}
+                  className={cn(inputCls, addressErrors.state && "border-red-400 focus:border-red-400 focus:ring-red-200")}
+                  value={addressDraft.state}
+                  onChange={(event) => {
+                    const next = { ...addressDraft, state: event.target.value };
+                    setAddressDraft(next);
+                    validateSingleAddressField("state", next);
+                  }}
+                  onBlur={() => validateSingleAddressField("state", addressDraft)}
+                >
+                  <option value="">Select state or UT</option>
+                  {INDIAN_STATES.map((st) => (
+                    <option key={st} value={st}>{st}</option>
+                  ))}
+                </select>
+                {addressErrors.state && <p id="addr-state-err" role="alert" className="mt-1 text-xs font-medium text-red-600">{addressErrors.state}</p>}
+              </div>
+              <div>
+                <label htmlFor="addr-pincode" className="mb-1 block text-xs font-bold uppercase tracking-wide text-graymute">PIN code *</label>
+                <input
+                  id="addr-pincode"
+                  required
+                  inputMode="numeric"
+                  maxLength={6}
+                  autoComplete="postal-code"
+                  placeholder="641035"
+                  aria-invalid={Boolean(addressErrors.pincode)}
+                  aria-describedby={addressErrors.pincode ? "addr-pincode-err" : undefined}
+                  className={cn(inputCls, addressErrors.pincode && "border-red-400 focus:border-red-400 focus:ring-red-200")}
+                  value={addressDraft.pincode}
+                  onChange={(event) => {
+                    const next = { ...addressDraft, pincode: event.target.value };
+                    setAddressDraft(next);
+                    if (addressErrors.pincode) validateSingleAddressField("pincode", next);
+                  }}
+                  onBlur={() => validateSingleAddressField("pincode", addressDraft)}
+                />
+                {addressErrors.pincode && <p id="addr-pincode-err" role="alert" className="mt-1 text-xs font-medium text-red-600">{addressErrors.pincode}</p>}
+              </div>
               <label className="flex items-center gap-2 text-sm text-charcoal sm:col-span-2">
                 <input type="checkbox" checked={addressDraft.isDefault} onChange={(event) => setAddressDraft({ ...addressDraft, isDefault: event.target.checked })} />
                 Set as default delivery address
               </label>
+              {addressSubmitError && (
+                <p role="alert" className="rounded-xl bg-red-50 px-3.5 py-2.5 text-xs font-medium text-red-700 sm:col-span-2">
+                  {addressSubmitError}
+                </p>
+              )}
               <div className="flex gap-2 sm:col-span-2">
                 <button type="submit" disabled={addressSaving} className="h-10 rounded-xl bg-forest-900 px-4 text-sm font-bold text-white disabled:opacity-60">
                   {addressSaving ? "Saving…" : editingAddressId ? "Save address" : "Add address"}
                 </button>
                 {editingAddressId && (
-                  <button type="button" onClick={() => { setEditingAddressId(null); setAddressDraft(EMPTY_ADDRESS); }} className="h-10 rounded-xl border border-forest-200 px-4 text-sm font-semibold text-charcoal">
+                  <button type="button" onClick={() => { setEditingAddressId(null); setAddressDraft(EMPTY_ADDRESS); setAddressErrors({}); }} className="h-10 rounded-xl border border-forest-200 px-4 text-sm font-semibold text-charcoal">
                     Cancel
                   </button>
                 )}

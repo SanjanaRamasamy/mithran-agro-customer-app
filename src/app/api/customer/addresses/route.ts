@@ -1,10 +1,10 @@
 import {
   callAuthenticatedPrestaShopApp,
-  CustomerApiError,
   customerApiErrorResponse,
   hasSameOrigin,
   readJsonBody,
 } from "@/lib/prestashop-app-api";
+import { validateAddressFields } from "@/lib/validation";
 
 export async function POST(request: Request) {
   if (!hasSameOrigin(request)) {
@@ -12,11 +12,18 @@ export async function POST(request: Request) {
   }
   try {
     const body = await readJsonBody(request);
-    const required = ["name", "phone", "line1", "city", "state", "pincode", "label"];
-    if (required.some((key) => typeof body[key] !== "string")) {
-      throw new CustomerApiError("invalid_input");
+    const check = validateAddressFields(body);
+    if (!check.ok) {
+      const firstError = Object.values(check.errors)[0] ?? "Check the address details and try again.";
+      return Response.json(
+        { success: false, code: "invalid_input", message: firstError, errors: check.errors },
+        { status: 400, headers: { "Cache-Control": "no-store" } },
+      );
     }
-    const result = await callAuthenticatedPrestaShopApp(request, "addresses:create", body);
+    const result = await callAuthenticatedPrestaShopApp(request, "addresses:create", {
+      ...body,
+      ...check.values,
+    });
     return Response.json(result, { status: 201, headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     return customerApiErrorResponse(error);

@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import { NextResponse } from "next/server";
 import {
   CUSTOMER_SESSION_COOKIE,
@@ -88,6 +89,9 @@ export async function callPrestaShopApp<T>(
   endpoint.searchParams.set("controller", "api");
   endpoint.searchParams.set("action", action);
 
+  const requestId = crypto.randomUUID();
+  const operation = `prestashop-app:${action}`;
+
   let response: Response;
   try {
     response = await fetch(endpoint, {
@@ -102,7 +106,14 @@ export async function callPrestaShopApp<T>(
       redirect: "error",
       signal: AbortSignal.timeout(15_000),
     });
-  } catch {
+  } catch (error) {
+    console.error("[prestashop-app-api]", {
+      requestId,
+      operation,
+      stage: "fetch",
+      upstreamStatus: null,
+      errorCode: error instanceof Error ? error.name : "fetch_error",
+    });
     throw new CustomerApiError("unavailable");
   }
 
@@ -110,6 +121,13 @@ export async function callPrestaShopApp<T>(
   try {
     payload = await response.json();
   } catch {
+    console.error("[prestashop-app-api]", {
+      requestId,
+      operation,
+      stage: "parse",
+      upstreamStatus: response.status,
+      errorCode: "invalid_json",
+    });
     throw new CustomerApiError("unavailable");
   }
 
@@ -121,6 +139,13 @@ export async function callPrestaShopApp<T>(
       typeof payload.code === "string"
         ? payload.code
         : "unavailable";
+    console.error("[prestashop-app-api]", {
+      requestId,
+      operation,
+      stage: "upstream_http",
+      upstreamStatus: response.status,
+      errorCode: code,
+    });
     throw new CustomerApiError(code);
   }
   return payload as T;

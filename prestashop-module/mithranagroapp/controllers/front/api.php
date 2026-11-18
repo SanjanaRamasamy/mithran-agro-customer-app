@@ -44,7 +44,15 @@ class MithranagroappApiModuleFrontController extends ModuleFrontController
                 'code' => $error->getApiCode(),
             ]);
         } catch (Throwable $error) {
-            PrestaShopLogger::addLog('Mithran Agro customer API internal error.', 3);
+            $safeAction = preg_replace('/[^a-zA-Z0-9:_-]/', '', (string) Tools::getValue('action'));
+            PrestaShopLogger::addLog(
+                sprintf(
+                    'Mithran Agro customer API internal error [action=%s, exception=%s].',
+                    $safeAction ?: 'unknown',
+                    get_class($error)
+                ),
+                3
+            );
             $this->sendResponse(500, ['success' => false, 'code' => 'unavailable']);
         }
     }

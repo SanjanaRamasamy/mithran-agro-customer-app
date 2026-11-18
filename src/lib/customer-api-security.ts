@@ -2,11 +2,16 @@ export const CUSTOMER_SESSION_COOKIE = "mithran_customer_session";
 
 const publicErrors: Record<string, { status: number; message: string }> = {
   invalid_input: { status: 400, message: "Check the information and try again." },
+  invalid_phone: { status: 400, message: "Enter a valid 10-digit mobile number." },
+  invalid_pincode: { status: 400, message: "Enter a valid 6-digit PIN code." },
+  invalid_name: { status: 400, message: "Enter both first and last name using letters, spaces, hyphens, or apostrophes." },
+  invalid_state: { status: 400, message: "Select a valid Indian state or union territory." },
+  invalid_address: { status: 400, message: "Check the address details and try again." },
   invalid_credentials: { status: 401, message: "Email or password is incorrect." },
   duplicate_email: { status: 409, message: "An account with this email already exists." },
   rate_limited: { status: 429, message: "Too many attempts. Please wait and try again." },
   duplicate_submission: { status: 409, message: "This order is already being processed. Check your orders before retrying." },
-  unauthorized: { status: 401, message: "Please sign in to continue." },
+  unauthorized: { status: 401, message: "Your session has expired. Please sign in again." },
   not_found: { status: 404, message: "The requested customer record was not found." },
   address_not_found: { status: 404, message: "That delivery address could not be found." },
   order_not_found: { status: 404, message: "That order could not be found." },

@@ -5,6 +5,7 @@ import {
   hasSameOrigin,
   readJsonBody,
 } from "@/lib/prestashop-app-api";
+import { validateEmail } from "@/lib/validation";
 
 export async function POST(request: Request) {
   if (!hasSameOrigin(request)) {
@@ -13,7 +14,14 @@ export async function POST(request: Request) {
   try {
     const body = await readJsonBody(request);
     if (typeof body.email !== "string") throw new CustomerApiError("invalid_input");
-    await callPrestaShopApp("password:request-reset", { email: body.email });
+    const emailCheck = validateEmail(body.email);
+    if (!emailCheck.ok) {
+      return Response.json(
+        { success: false, code: "invalid_input", message: emailCheck.error },
+        { status: 400, headers: { "Cache-Control": "no-store" } },
+      );
+    }
+    await callPrestaShopApp("password:request-reset", { email: emailCheck.value });
     return Response.json(
       {
         success: true,

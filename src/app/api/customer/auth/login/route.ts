@@ -7,6 +7,7 @@ import {
   readJsonBody,
   setCustomerSessionCookie,
 } from "@/lib/prestashop-app-api";
+import { validateEmail } from "@/lib/validation";
 
 interface LoginResult {
   success: true;
@@ -24,8 +25,12 @@ export async function POST(request: Request) {
     if (typeof body.email !== "string" || typeof body.password !== "string") {
       throw new CustomerApiError("invalid_input");
     }
+    const emailCheck = validateEmail(body.email);
+    if (!emailCheck.ok || body.password.length === 0 || body.password.length > 4096) {
+      throw new CustomerApiError("invalid_input");
+    }
     const result = await callPrestaShopApp<LoginResult>("login", {
-      email: body.email,
+      email: emailCheck.value,
       password: body.password,
     });
     if (!result.success || !/^[A-Fa-f0-9]{64,128}$/.test(result.token)) {

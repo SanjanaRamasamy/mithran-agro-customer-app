@@ -13,6 +13,7 @@ import { useCatalog } from "@/contexts/CatalogContext";
 import { useWishlist } from "@/contexts/WishlistContext";
 import { safeReturnPath } from "@/utils/safe-redirect";
 import { requestedWishlistAddition } from "@/utils/customer-access";
+import { validateEmail, validatePassword, validatePersonName } from "@/lib/validation";
 
 function LoginInner() {
   const router = useRouter();
@@ -29,9 +30,15 @@ function LoginInner() {
   );
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [name, setName] = useState("");
   const [showPw, setShowPw] = useState(false);
-  const [errors, setErrors] = useState<{ email?: string; password?: string; name?: string }>({});
+  const [errors, setErrors] = useState<{
+    email?: string;
+    password?: string;
+    confirmPassword?: string;
+    name?: string;
+  }>({});
   const [submitting, setSubmitting] = useState(false);
 
   const finishSignIn = () => {
@@ -46,13 +53,77 @@ function LoginInner() {
     router.replace(redirect);
   };
 
+  const validateField = (
+    field: "name" | "email" | "password" | "confirmPassword",
+    nextVal?: string,
+  ) => {
+    const val =
+      nextVal !== undefined
+        ? nextVal
+        : field === "name"
+          ? name
+          : field === "email"
+            ? email
+            : field === "password"
+              ? password
+              : confirmPassword;
+
+    let err: string | undefined;
+    if (field === "name" && mode === "signup") {
+      const r = validatePersonName(val, { min: 2, max: 80, requireFullName: true, label: "Full name" });
+      if (!r.ok) err = r.error;
+    } else if (field === "email") {
+      const r = validateEmail(val);
+      if (!r.ok) err = r.error;
+    } else if (field === "password") {
+      if (mode === "signup") {
+        const r = validatePassword(val);
+        if (!r.ok) err = r.error;
+      } else if (!val) {
+        err = "Password is required.";
+      }
+    } else if (field === "confirmPassword" && mode === "signup") {
+      if (!val) err = "Confirm your password.";
+      else if (val !== password) err = "Passwords do not match.";
+    }
+
+    setErrors((prev) => {
+      const next = { ...prev };
+      if (err) next[field] = err;
+      else delete next[field];
+      return next;
+    });
+  };
+
   const validate = () => {
     const errs: typeof errors = {};
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) errs.email = "Enter a valid email address.";
-    if (password.length < 8) errs.password = "Password must be at least 8 characters.";
-    if (mode === "signup" && name.trim().length < 2) errs.name = "Please tell us your name.";
+    if (mode === "signup") {
+      const nameCheck = validatePersonName(name, { min: 2, max: 80, requireFullName: true, label: "Full name" });
+      if (!nameCheck.ok && nameCheck.error) errs.name = nameCheck.error;
+    }
+    const emailCheck = validateEmail(email);
+    if (!emailCheck.ok && emailCheck.error) errs.email = emailCheck.error;
+    if (mode === "signup") {
+      const pwCheck = validatePassword(password);
+      if (!pwCheck.ok && pwCheck.error) errs.password = pwCheck.error;
+      if (!confirmPassword) errs.confirmPassword = "Confirm your password.";
+      else if (confirmPassword !== password) errs.confirmPassword = "Passwords do not match.";
+    } else if (!password) {
+      errs.password = "Password is required.";
+    }
     setErrors(errs);
-    return Object.keys(errs).length === 0;
+    if (Object.keys(errs).length > 0) {
+      const firstId = errs.name
+        ? "login-name"
+        : errs.email
+          ? "login-email"
+          : errs.password
+            ? "login-password"
+            : "login-confirm-password";
+      document.getElementById(firstId)?.focus();
+      return false;
+    }
+    return true;
   };
 
   const submit = async (e: React.FormEvent) => {
@@ -150,50 +221,76 @@ function LoginInner() {
           <form onSubmit={submit} className="space-y-4" noValidate>
             {mode === "signup" && (
               <div>
-                <label htmlFor="login-name" className="sr-only">Full name</label>
+                <label htmlFor="login-name" className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-graymute">Full name *</label>
                 <input
                   id="login-name"
-                  className={cn(inputCls, errors.name && "border-red-300")}
-                  placeholder="Full name"
+                  maxLength={80}
+                  className={cn(inputCls, "pl-4", errors.name && "border-red-400 focus:border-red-400 focus:ring-red-200")}
+                  placeholder="First and last name"
                   value={name}
-                  onChange={(e) => setName(e.target.value)}
+                  onChange={(e) => {
+                    setName(e.target.value);
+                    if (errors.name) validateField("name", e.target.value);
+                  }}
+                  onBlur={() => validateField("name")}
                   autoComplete="name"
+                  aria-invalid={Boolean(errors.name)}
+                  aria-describedby={errors.name ? "login-name-err" : undefined}
                 />
-                {errors.name && <p className="mt-1 text-xs font-medium text-red-600">{errors.name}</p>}
+                {errors.name && <p id="login-name-err" role="alert" className="mt-1 text-xs font-medium text-red-600">{errors.name}</p>}
               </div>
             )}
 
             <div>
-              <label htmlFor="login-email" className="sr-only">Email</label>
+              <label htmlFor="login-email" className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-graymute">Email address *</label>
               <div className="relative">
                 <Mail className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-graymute" aria-hidden />
                 <input
                   id="login-email"
                   type="email"
-                  className={cn(inputCls, errors.email && "border-red-300")}
+                  maxLength={254}
+                  className={cn(inputCls, errors.email && "border-red-400 focus:border-red-400 focus:ring-red-200")}
                   placeholder="you@example.com"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    if (errors.email) validateField("email", e.target.value);
+                  }}
+                  onBlur={() => validateField("email")}
                   autoComplete="email"
-                  aria-invalid={!!errors.email}
+                  aria-invalid={Boolean(errors.email)}
+                  aria-describedby={errors.email ? "login-email-err" : undefined}
                 />
               </div>
-              {errors.email && <p className="mt-1 text-xs font-medium text-red-600">{errors.email}</p>}
+              {errors.email && <p id="login-email-err" role="alert" className="mt-1 text-xs font-medium text-red-600">{errors.email}</p>}
             </div>
 
             <div>
-              <label htmlFor="login-password" className="sr-only">Password</label>
+              <label htmlFor="login-password" className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-graymute">Password *</label>
               <div className="relative">
                 <Lock className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-graymute" aria-hidden />
                 <input
                   id="login-password"
                   type={showPw ? "text" : "password"}
-                  className={cn(inputCls, "pr-12", errors.password && "border-red-300")}
-                  placeholder="Password (any 6+ characters)"
+                  maxLength={72}
+                  className={cn(inputCls, "pr-12", errors.password && "border-red-400 focus:border-red-400 focus:ring-red-200")}
+                  placeholder={mode === "signup" ? "8–72 characters" : "Enter your password"}
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={(e) => {
+                    setPassword(e.target.value);
+                    if (errors.password) validateField("password", e.target.value);
+                    if (mode === "signup" && errors.confirmPassword && confirmPassword === e.target.value) {
+                      setErrors((prev) => {
+                        const next = { ...prev };
+                        delete next.confirmPassword;
+                        return next;
+                      });
+                    }
+                  }}
+                  onBlur={() => validateField("password")}
                   autoComplete={mode === "login" ? "current-password" : "new-password"}
-                  aria-invalid={!!errors.password}
+                  aria-invalid={Boolean(errors.password)}
+                  aria-describedby={errors.password ? "login-password-err" : undefined}
                 />
                 <button
                   type="button"
@@ -204,8 +301,34 @@ function LoginInner() {
                   {showPw ? <EyeOff className="size-4" aria-hidden /> : <Eye className="size-4" aria-hidden />}
                 </button>
               </div>
-              {errors.password && <p className="mt-1 text-xs font-medium text-red-600">{errors.password}</p>}
+              {errors.password && <p id="login-password-err" role="alert" className="mt-1 text-xs font-medium text-red-600">{errors.password}</p>}
             </div>
+
+            {mode === "signup" && (
+              <div>
+                <label htmlFor="login-confirm-password" className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-graymute">Confirm password *</label>
+                <div className="relative">
+                  <Lock className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-graymute" aria-hidden />
+                  <input
+                    id="login-confirm-password"
+                    type={showPw ? "text" : "password"}
+                    maxLength={72}
+                    className={cn(inputCls, errors.confirmPassword && "border-red-400 focus:border-red-400 focus:ring-red-200")}
+                    placeholder="Re-enter your password"
+                    value={confirmPassword}
+                    onChange={(e) => {
+                      setConfirmPassword(e.target.value);
+                      if (errors.confirmPassword) validateField("confirmPassword", e.target.value);
+                    }}
+                    onBlur={() => validateField("confirmPassword")}
+                    autoComplete="new-password"
+                    aria-invalid={Boolean(errors.confirmPassword)}
+                    aria-describedby={errors.confirmPassword ? "login-confirm-password-err" : undefined}
+                  />
+                </div>
+                {errors.confirmPassword && <p id="login-confirm-password-err" role="alert" className="mt-1 text-xs font-medium text-red-600">{errors.confirmPassword}</p>}
+              </div>
+            )}
 
             <div className="flex items-center justify-between">
               <button

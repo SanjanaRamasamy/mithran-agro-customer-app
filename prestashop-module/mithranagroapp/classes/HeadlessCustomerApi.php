@@ -133,7 +133,7 @@ class HeadlessCustomerApi
         $name = $this->boundedText($body['name'] ?? null, 2, 128);
         $email = $this->normalizedEmail($body['email'] ?? null);
         $password = $body['password'] ?? null;
-        if ($name === null || $email === null || !is_string($password) || !Validate::isPasswd($password, 8, 72)) {
+        if ($name === null || $email === null || !$this->isValidPassword($password)) {
             throw new MithranAgroApiException('invalid_input', 400);
         }
         $this->enforceRateLimit('register', $email, 4);
@@ -705,6 +705,9 @@ class HeadlessCustomerApi
 
         if (array_key_exists('phone', $body)) {
             $phone = $this->phone($body['phone']);
+            if ($phone === null) {
+                throw new MithranAgroApiException('invalid_input', 400);
+            }
             $addresses = $this->customerAddressesRaw($customer);
             if (!$addresses) {
                 throw new MithranAgroApiException('invalid_input', 400);
@@ -736,7 +739,8 @@ class HeadlessCustomerApi
         $customer = $this->authenticatedCustomer();
         $address = $this->newAddressFromPayload($body, $customer);
         if (!$address->add()) {
-            throw new MithranAgroApiException('invalid_input', 400);
+            PrestaShopLogger::addLog('Mithran Agro could not save a new customer address.', 3);
+            throw new MithranAgroApiException('invalid_address', 400);
         }
 
         $addresses = $this->customerAddressesRaw($customer);
@@ -1245,40 +1249,45 @@ class HeadlessCustomerApi
 
     private function newAddressFromPayload(array $body, $customer, $existing = null)
     {
-        $name = $this->boundedText($body['name'] ?? null, 2, 128);
-        $phone = $this->phone($body['phone'] ?? null);
-        $line1 = $this->boundedText($body['line1'] ?? null, 3, 128);
-        $line2 = $this->boundedText($body['line2'] ?? '', 0, 128);
-        $city = $this->boundedText($body['city'] ?? null, 2, 64);
-        $stateName = $this->boundedText($body['state'] ?? null, 2, 64);
-        $pincode = $this->boundedText($body['pincode'] ?? null, 6, 12);
-        $label = $this->boundedText($body['label'] ?? null, 2, 32);
-        if (
-            $name === null || $phone === null || $line1 === null || $line2 === null ||
-            $city === null || $stateName === null || $pincode === null || $label === null ||
-            !preg_match('/^\d{6}$/', $pincode)
-        ) {
-            throw new MithranAgroApiException('invalid_input', 400);
+        $name = $this->boundedText($body['name'] ?? null, 2, 80);
+        if ($name === null) {
+            throw new MithranAgroApiException('invalid_name', 400);
         }
         $parts = preg_split('/\s+/', trim($name), 2);
         if (!is_array($parts) || count($parts) !== 2 || !Validate::isName($parts[0]) || !Validate::isName($parts[1])) {
-            throw new MithranAgroApiException('invalid_input', 400);
+            throw new MithranAgroApiException('invalid_name', 400);
+        }
+
+        $phone = $this->phone($body['phone'] ?? null);
+        if ($phone === null) {
+            throw new MithranAgroApiException('invalid_phone', 400);
+        }
+
+        $pincode = $this->boundedText($body['pincode'] ?? null, 6, 6);
+        if ($pincode === null || !preg_match('/^[1-9]\d{5}$/', $pincode)) {
+            throw new MithranAgroApiException('invalid_pincode', 400);
+        }
+
+        $line1 = $this->boundedText($body['line1'] ?? null, 5, 128);
+        $line2 = $this->boundedText($body['line2'] ?? '', 0, 128);
+        $city = $this->boundedText($body['city'] ?? null, 2, 60);
+        $label = $this->boundedText($body['label'] ?? null, 2, 30);
+        $stateName = $this->boundedText($body['state'] ?? null, 2, 64);
+        if ($line1 === null || $line2 === null || $city === null || $label === null) {
+            throw new MithranAgroApiException('invalid_address', 400);
+        }
+        if ($stateName === null) {
+            throw new MithranAgroApiException('invalid_state', 400);
         }
 
         $countryId = (int) Country::getByIso('IN');
         $country = $countryId > 0 ? new Country($countryId) : null;
-        $stateId = (int) State::getIdByName($stateName);
-        $state = $stateId > 0 ? new State($stateId) : null;
-        if (
-            !$country ||
-            !Validate::isLoadedObject($country) ||
-            !$country->active ||
-            !$state ||
-            !Validate::isLoadedObject($state) ||
-            (int) $state->id_country !== $countryId
-        ) {
-            throw new MithranAgroApiException('invalid_input', 400);
+        if (!$country || !Validate::isLoadedObject($country) || !$country->active) {
+            PrestaShopLogger::addLog('Mithran Agro address rejected: India (IN) country is not active.', 3);
+            throw new MithranAgroApiException('configuration', 503);
         }
+
+        $stateId = $this->resolveIndianStateId($countryId, (bool) $country->contains_states, $stateName);
 
         $address = $existing ?: new Address();
         $address->id_customer = (int) $customer->id;
@@ -1295,6 +1304,41 @@ class HeadlessCustomerApi
         $address->active = true;
 
         return $address;
+    }
+
+    private function resolveIndianStateId($countryId, $containsStates, $stateName)
+    {
+        if (!$containsStates) {
+            return 0;
+        }
+        $rows = Db::getInstance()->executeS(
+            'SELECT `id_state`, `name` FROM `' . _DB_PREFIX_ . 'state`
+             WHERE `id_country` = ' . (int) $countryId . ' AND `active` = 1'
+        );
+        if (!$rows) {
+            // If India has no active state rows seeded in ps_state, allow 0 rather than blocking addresses.
+            return 0;
+        }
+
+        $aliases = [
+            'odisha' => ['orissa'],
+            'uttarakhand' => ['uttaranchal'],
+            'puducherry' => ['pondicherry'],
+            'andaman and nicobar islands' => ['andaman and nicobar'],
+            'jammu and kashmir' => ['jammu & kashmir'],
+            'dadra and nagar haveli and daman and diu' => ['dadra and nagar haveli', 'daman and diu'],
+        ];
+
+        $target = strtolower(trim($stateName));
+        $candidates = array_merge([$target], $aliases[$target] ?? []);
+        foreach ($rows as $row) {
+            $rowName = strtolower(trim((string) $row['name']));
+            if (in_array($rowName, $candidates, true)) {
+                return (int) $row['id_state'];
+            }
+        }
+
+        throw new MithranAgroApiException('invalid_state', 400);
     }
 
     private function customerPayload($customer)
@@ -1902,13 +1946,23 @@ class HeadlessCustomerApi
         return $text;
     }
 
+    private function isValidPassword($password)
+    {
+        if (!is_string($password)) {
+            return false;
+        }
+        $length = strlen($password);
+
+        return $length >= 8 && $length <= 72 && !preg_match('/[\x00-\x1F\x7F]/', $password);
+    }
+
     private function phone($value)
     {
         if (!is_string($value)) {
             return null;
         }
         $phone = trim($value);
-        if (!preg_match('/^\+?[0-9][0-9 ()-]{7,17}$/', $phone)) {
+        if ($phone !== $value || !preg_match('/^[6-9]\d{9}$/', $phone)) {
             return null;
         }
 
