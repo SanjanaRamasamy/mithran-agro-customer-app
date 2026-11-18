@@ -124,6 +124,8 @@ export function OrderSummary({
   couponSlot = true,
   disabled,
   sticky,
+  realCheckout = false,
+  authoritativeTotal,
 }: {
   ctaLabel?: string;
   ctaHref?: string;
@@ -132,6 +134,8 @@ export function OrderSummary({
   couponSlot?: boolean;
   disabled?: boolean;
   sticky?: boolean;
+  realCheckout?: boolean;
+  authoritativeTotal?: number;
 }) {
   const { totals, itemCount } = useCart();
 
@@ -144,47 +148,57 @@ export function OrderSummary({
         <dl className="mt-3 space-y-2.5 text-sm">
           <div className="flex justify-between">
             <dt className="text-graymute">
-              Basket total ({itemCount} {itemCount === 1 ? "item" : "items"})
+              {realCheckout
+                ? `Current basket estimate (${itemCount} ${itemCount === 1 ? "item" : "items"})`
+                : `Basket total (${itemCount} ${itemCount === 1 ? "item" : "items"})`}
             </dt>
             <dd className="font-semibold text-charcoal">{formatPrice(totals.subtotal)}</dd>
           </div>
-          {showSavings && totals.savings > 0 && (
-            <div className="flex justify-between">
-              <dt className="text-graymute">Produce savings</dt>
-              <dd className="font-semibold text-success">−{formatPrice(totals.savings)}</dd>
-            </div>
+          {!realCheckout && (
+            <>
+              {showSavings && totals.savings > 0 && (
+                <div className="flex justify-between">
+                  <dt className="text-graymute">Produce savings</dt>
+                  <dd className="font-semibold text-success">−{formatPrice(totals.savings)}</dd>
+                </div>
+              )}
+              {totals.discount > 0 && (
+                <div className="flex justify-between">
+                  <dt className="text-graymute">Coupon discount</dt>
+                  <dd className="font-semibold text-success">−{formatPrice(totals.discount)}</dd>
+                </div>
+              )}
+              <div className="flex justify-between">
+                <dt className="text-graymute">Delivery fee</dt>
+                <dd className={cn("font-semibold", totals.deliveryFee === 0 ? "text-success" : "text-charcoal")}>
+                  {totals.deliveryFee === 0 ? "FREE" : formatPrice(totals.deliveryFee)}
+                </dd>
+              </div>
+              <div className="flex justify-between">
+                <dt className="text-graymute">Handling (simulated)</dt>
+                <dd className="font-semibold text-charcoal">{formatPrice(totals.handlingFee)}</dd>
+              </div>
+              <div className="flex justify-between">
+                <dt className="text-graymute">Zero-waste packing</dt>
+                <dd className="font-semibold text-charcoal">{formatPrice(totals.greenFee)}</dd>
+              </div>
+              <div className="flex justify-between">
+                <dt className="text-graymute">GST (5%, mock)</dt>
+                <dd className="font-semibold text-charcoal">{formatPrice(totals.tax)}</dd>
+              </div>
+            </>
           )}
-          {totals.discount > 0 && (
-            <div className="flex justify-between">
-              <dt className="text-graymute">Coupon discount</dt>
-              <dd className="font-semibold text-success">−{formatPrice(totals.discount)}</dd>
-            </div>
-          )}
-          <div className="flex justify-between">
-            <dt className="text-graymute">Delivery fee</dt>
-            <dd className={cn("font-semibold", totals.deliveryFee === 0 ? "text-success" : "text-charcoal")}>
-              {totals.deliveryFee === 0 ? "FREE" : formatPrice(totals.deliveryFee)}
-            </dd>
-          </div>
-          <div className="flex justify-between">
-            <dt className="text-graymute">Handling (simulated)</dt>
-            <dd className="font-semibold text-charcoal">{formatPrice(totals.handlingFee)}</dd>
-          </div>
-          <div className="flex justify-between">
-            <dt className="text-graymute">Zero-waste packing</dt>
-            <dd className="font-semibold text-charcoal">{formatPrice(totals.greenFee)}</dd>
-          </div>
-          <div className="flex justify-between">
-            <dt className="text-graymute">GST (5%, mock)</dt>
-            <dd className="font-semibold text-charcoal">{formatPrice(totals.tax)}</dd>
-          </div>
           <div className="flex justify-between border-t border-forest-50 pt-3 text-base">
-            <dt className="font-bold text-charcoal">To pay</dt>
-            <dd className="font-extrabold text-charcoal">{formatPrice(totals.total)}</dd>
+            <dt className="font-bold text-charcoal">{realCheckout ? "PrestaShop order total" : "Estimated total"}</dt>
+            <dd className="font-extrabold text-charcoal">
+              {realCheckout
+                ? authoritativeTotal === undefined ? "Review total" : formatPrice(authoritativeTotal)
+                : formatPrice(totals.total)}
+            </dd>
           </div>
         </dl>
 
-        {showSavings && totals.savings + totals.discount > 0 && (
+        {!realCheckout && showSavings && totals.savings + totals.discount > 0 && (
           <p className="mt-3 rounded-xl bg-emerald-soft/70 px-3.5 py-2.5 text-xs font-bold text-emerald-800">
             🌱 Total savings on this order: {formatPrice(totals.savings + totals.discount)}
           </p>
@@ -223,7 +237,9 @@ export function OrderSummary({
         )}
 
         <p className="mt-2.5 text-center text-[11px] leading-relaxed text-graymute">
-          Simulated checkout — no real payment will be processed.
+          {realCheckout
+            ? "Inventory and final amount are verified by PrestaShop before order creation."
+            : "Basket totals are estimates. Final price and availability are checked at checkout."}
         </p>
       </div>
     </div>

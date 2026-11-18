@@ -106,10 +106,7 @@ export const TRACKING_FLOW: OrderStatus[] = [
 /* --------------------------- Payment ---------------------------- */
 
 export const PAYMENT_METHODS = [
-  { id: "upi", label: "UPI", hint: "GPay, PhonePe, Paytm & more", simulated: true },
-  { id: "card", label: "Credit / Debit Card", hint: "Visa, Mastercard, RuPay", simulated: true },
-  { id: "wallet", label: "Mithren Agro Wallet", hint: "Balance ₹1,250 (mock)", simulated: true },
-  { id: "cod", label: "Cash on Delivery", hint: "Pay when your order arrives", simulated: true },
+  { id: "cod", label: "Cash on Delivery", hint: "Pay when the order arrives; PrestaShop records collection." },
 ] as const;
 
 /* -------------------------- Sort options ------------------------ */

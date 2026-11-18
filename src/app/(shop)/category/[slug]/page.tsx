@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
 import { CATEGORIES, CATEGORY_BY_SLUG, CATEGORY_GROUPS, CATEGORY_GROUP_BY_ID } from "@/data/categories";
 import { CategoryLanding } from "@/components/category/category-landing";
 
@@ -13,7 +12,7 @@ export function generateStaticParams() {
   return [...catSlugs, ...groupSlugs];
 }
 
-export const dynamicParams = false;
+export const dynamicParams = true;
 
 export async function generateMetadata({
   params,
@@ -23,9 +22,8 @@ export async function generateMetadata({
   const { slug } = await params;
   const cat = CATEGORY_BY_SLUG[slug];
   const group = CATEGORY_GROUP_BY_ID[slug];
-  const name = cat?.name ?? group?.name;
+  const name = cat?.name ?? group?.name ?? slug.replace(/-/g, " ");
   const description = cat?.description ?? group?.description;
-  if (!name) return {};
   return {
     title: `${name} — Shop the best of Mithren Agro`,
     description,
@@ -38,10 +36,6 @@ export default async function CategoryPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const cat = CATEGORY_BY_SLUG[slug];
-  const group = CATEGORY_GROUP_BY_ID[slug];
-
-  if (!cat && !group) notFound();
 
   return <CategoryLanding slug={slug} />;
 }

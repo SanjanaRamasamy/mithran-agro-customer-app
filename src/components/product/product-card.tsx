@@ -14,7 +14,7 @@ import { ProduceBadge } from "@/components/ui/produce-badge";
 import { getBestVariant, getLowestVariantPrice } from "@/utils/product";
 import { categoryKind } from "@/data/categories";
 import { cn } from "@/lib/utils";
-import { SELLER_BY_ID } from "@/data/sellers";
+import { useCatalog } from "@/contexts/CatalogContext";
 
 /** Agri-input spec block — Weight is already shown via variant chips;
  *  this adds the two agronomy lines customers shop fertilizers by. */
@@ -201,7 +201,8 @@ function ProductCardInner({ product, view = "grid", className, priority }: Produ
   const wished = wishlist.has(product.id);
   const best = getBestVariant(product);
   const cheapest = getLowestVariantPrice(product);
-  const seller = SELLER_BY_ID[product.sellerId];
+  const { farmBySlug } = useCatalog();
+  const seller = product.sellerId ? farmBySlug[product.sellerId] : undefined;
   const kind = categoryKind(product);
   const href = `/products/${product.slug}`;
   const isFashion = kind === "fashion";
@@ -248,7 +249,7 @@ function ProductCardInner({ product, view = "grid", className, priority }: Produ
                 </h3>
               </Link>
               {seller && (
-                <p className="mt-0.5 truncate text-xs text-graymute">by {seller.farmName}</p>
+                <p className="mt-0.5 truncate text-xs text-graymute">by {seller.name}</p>
               )}
               <KindMeta product={product} className="mt-0.5" />
               {kind === "agri-input" && <AgriSpec product={product} />}
@@ -353,7 +354,7 @@ function ProductCardInner({ product, view = "grid", className, priority }: Produ
       <div className="flex flex-1 flex-col gap-1.5 p-3.5">
         {seller && (
           <p className="text-[11px] font-semibold uppercase tracking-wide text-forest-600">
-            {seller.farmName}
+            {seller.name}
           </p>
         )}
         <Link href={href} className="line-clamp-2 text-sm font-bold leading-snug text-charcoal hover:text-forest-800">

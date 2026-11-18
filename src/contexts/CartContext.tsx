@@ -1,11 +1,14 @@
 "use client";
 
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { AppliedCoupon, CartItem, CartLine, CartTotals, Product } from "@/types";
 import { useCatalog } from "@/contexts/CatalogContext";
+import { useAuth } from "@/contexts/AuthContext";
+import { useToast } from "@/contexts/NotificationContext";
 import { COUPONS } from "@/data/offers";
 import { makeCartItemId } from "@/utils/product";
-import { readStorage, writeStorage } from "@/utils/storage";
+import { readStorage, removeStorage, writeStorage } from "@/utils/storage";
+import { mergeCustomerCart, parseCustomerCart } from "@/utils/customer-sync";
 import {
   DELIVERY_FEE,
   FREE_DELIVERY_THRESHOLD,
@@ -55,7 +58,10 @@ function resolveLines(
   return items.flatMap((item) => {
     const product = productsById[item.productId];
     if (!product) return [];
-    const variant = product.variants.find((v) => v.id === item.variantId);
+    const variant = product.variants.find((v) => v.id === item.variantId) ??
+      (item.variantId === `prestashop-${item.productId}` && product.variants.length === 1
+        ? product.variants[0]
+        : undefined);
     if (!variant) return [];
     return [{ ...item, product, variant, lineTotal: variant.price * item.quantity }];
   });
@@ -92,6 +98,8 @@ function computeTotals(
 
 export function CartProvider({ children }: { children: React.ReactNode }) {
   const { products } = useCatalog();
+  const { user, isLoading: authLoading } = useAuth();
+  const { toast } = useToast();
   const productsById = useMemo(
     () => Object.fromEntries(products.map((product) => [product.id, product])),
     [products]
@@ -100,27 +108,139 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const [savedForLater, setSavedForLater] = useState<CartItem[]>([]);
   const [couponCode, setCouponCode] = useState<string | null>(null);
   const [isDrawerOpen, setDrawerOpen] = useState(false);
-  const [hydrated, setHydrated] = useState(false);
+  const [storageOwner, setStorageOwner] = useState<string | null | undefined>(undefined);
+  const persistenceQueue = useRef<Promise<void>>(Promise.resolve());
+  const currentUserId = useRef<string | null>(user?.id ?? null);
+  const hasCurrentStorage = storageOwner === (user?.id ?? null);
+  const visibleItems = hasCurrentStorage ? items : [];
+  const visibleSavedForLater = hasCurrentStorage ? savedForLater : [];
 
   useEffect(() => {
-    setItems(readStorage<CartItem[]>(CART_KEY, []));
-    setSavedForLater(readStorage<CartItem[]>(SAVED_KEY, []));
-    setCouponCode(readStorage<string | null>(COUPON_KEY, null));
-    setHydrated(true);
-  }, []);
+    currentUserId.current = user?.id ?? null;
+  }, [user?.id]);
 
   useEffect(() => {
-    if (hydrated) writeStorage(CART_KEY, items);
-  }, [items, hydrated]);
-  useEffect(() => {
-    if (hydrated) writeStorage(SAVED_KEY, savedForLater);
-  }, [savedForLater, hydrated]);
-  useEffect(() => {
-    if (hydrated) writeStorage(COUPON_KEY, couponCode);
-  }, [couponCode, hydrated]);
+    if (authLoading) return;
+    let cancelled = false;
+    const customerId = user?.id ?? null;
+    setStorageOwner(undefined);
 
-  const lines = useMemo(() => resolveLines(items, productsById), [items, productsById]);
-  const savedLines = useMemo(() => resolveLines(savedForLater, productsById), [savedForLater, productsById]);
+    if (!customerId) {
+      setItems(readStorage<CartItem[]>(CART_KEY, []));
+      setSavedForLater(readStorage<CartItem[]>(SAVED_KEY, []));
+      setCouponCode(readStorage<string | null>(COUPON_KEY, null));
+      setStorageOwner(null);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    setCouponCode(null);
+    const loadCustomerCart = async () => {
+      try {
+        const response = await fetch("/api/customer/cart", { cache: "no-store" });
+        const payload: unknown = await response.json();
+        if (
+          !response.ok ||
+          typeof payload !== "object" ||
+          payload === null ||
+          !("items" in payload)
+        ) {
+          throw new Error("Unable to load your saved basket.");
+        }
+        const remoteItems = parseCustomerCart(payload.items);
+        if (!remoteItems) throw new Error("Your saved basket could not be read.");
+
+        const guestRaw: unknown = readStorage<unknown>(CART_KEY, []);
+        const guestItems = parseCustomerCart(guestRaw);
+        let nextItems = remoteItems;
+        if (guestItems && guestItems.length > 0) {
+          const merged = mergeCustomerCart(remoteItems, guestItems);
+          const saveResponse = await fetch("/api/customer/cart", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            cache: "no-store",
+            body: JSON.stringify({ items: merged }),
+          });
+          const savePayload: unknown = await saveResponse.json();
+          const savedItems =
+            typeof savePayload === "object" &&
+            savePayload !== null &&
+            "items" in savePayload
+              ? parseCustomerCart(savePayload.items)
+              : null;
+          if (!saveResponse.ok || !savedItems) {
+            toast({
+              kind: "error",
+              title: "Your guest basket could not be merged. It remains saved in this browser.",
+            });
+          } else {
+            nextItems = savedItems;
+            removeStorage(CART_KEY);
+          }
+        } else if (guestRaw !== null && guestItems === null) {
+          toast({
+            kind: "error",
+            title: "Some guest basket items could not be synced. They remain saved in this browser.",
+          });
+        }
+
+        if (!cancelled) {
+          setItems(nextItems);
+          setSavedForLater(readStorage<CartItem[]>(SAVED_KEY, []));
+          setStorageOwner(customerId);
+        }
+      } catch {
+        if (!cancelled) {
+          toast({
+            kind: "error",
+            title: "Your saved basket could not be loaded from your account.",
+          });
+        }
+      }
+    };
+    void loadCustomerCart();
+    return () => {
+      cancelled = true;
+    };
+  }, [authLoading, user?.id, toast]);
+
+  useEffect(() => {
+    if (storageOwner === null && !user) writeStorage(CART_KEY, items);
+    if (storageOwner && storageOwner === user?.id) {
+      const ownerId = storageOwner;
+      const snapshot = JSON.stringify({ items });
+      persistenceQueue.current = persistenceQueue.current
+        .catch(() => undefined)
+        .then(async () => {
+          if (currentUserId.current !== ownerId) return;
+          const response = await fetch("/api/customer/cart", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            cache: "no-store",
+            body: snapshot,
+          });
+          if (!response.ok) throw new Error("Basket synchronization failed.");
+        })
+        .catch(() => {
+          if (currentUserId.current === ownerId) {
+            toast({
+              kind: "error",
+              title: "Your basket changes could not be synced to your account.",
+            });
+          }
+        });
+    }
+  }, [items, storageOwner, user?.id, toast]);
+  useEffect(() => {
+    if (storageOwner === null && !user) writeStorage(SAVED_KEY, savedForLater);
+  }, [savedForLater, storageOwner, user]);
+  useEffect(() => {
+    if (storageOwner === null && !user) writeStorage(COUPON_KEY, couponCode);
+  }, [couponCode, storageOwner, user]);
+
+  const lines = useMemo(() => resolveLines(visibleItems, productsById), [visibleItems, productsById]);
+  const savedLines = useMemo(() => resolveLines(visibleSavedForLater, productsById), [visibleSavedForLater, productsById]);
 
   const coupon = useMemo<AppliedCoupon | null>(() => {
     if (!couponCode) return null;
@@ -143,6 +263,9 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
   const addItem = useCallback(
     (productId: string, variantId: string, quantity = 1): AddResult => {
+      if (!hasCurrentStorage) {
+        return { ok: false, message: "Your saved basket is still loading." };
+      }
       const product = productsById[productId];
       const variant = product?.variants.find((v) => v.id === variantId);
       if (!product || !variant) return { ok: false, message: "Product unavailable" };
@@ -152,7 +275,10 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       if (!variant.inStock) return { ok: false, message: `${product.name} is out of stock` };
 
       const id = makeCartItemId(productId, variantId);
-      const existing = items.find((item) => item.id === id);
+      const existing = visibleItems.find((item) =>
+        item.productId === productId &&
+        (item.variantId === variantId || item.variantId === `prestashop-${productId}`)
+      );
       const requestedQuantity = Math.max(product.prestaShop.minimumQuantity, quantity);
       const nextQuantity = requestedQuantity + (existing?.quantity ?? 0);
       if (nextQuantity > product.prestaShop.quantity) {
@@ -162,7 +288,9 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       setItems((prev) => {
         if (existing) {
           return prev.map((i) =>
-            i.id === id ? { ...i, quantity: nextQuantity } : i
+            i.id === existing.id
+              ? { ...i, id, variantId, quantity: nextQuantity }
+              : i
           );
         }
         return [
@@ -172,17 +300,21 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       });
       return { ok: true, message: `${product.name} added to basket` };
     },
-    [items, productsById]
+    [hasCurrentStorage, visibleItems, productsById]
   );
 
   const updateQuantity = useCallback((id: string, quantity: number) => {
+    if (!hasCurrentStorage) return;
     if (quantity <= 0) {
       setItems((prev) => prev.filter((i) => i.id !== id));
       return;
     }
-    const item = items.find((candidate) => candidate.id === id);
+    const item = visibleItems.find((candidate) => candidate.id === id);
     const product = item ? productsById[item.productId] : undefined;
-    const variant = product?.variants.find((candidate) => candidate.id === item?.variantId);
+    const variant = product?.variants.find((candidate) => candidate.id === item?.variantId) ??
+      (item?.variantId === `prestashop-${item?.productId}` && product?.variants.length === 1
+        ? product.variants[0]
+        : undefined);
     if (!item || !product || !variant) return;
     const minimum = product.prestaShop?.minimumQuantity ?? 1;
     const maximum = variant.stockCount ?? 10;
@@ -190,34 +322,43 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     setItems((prev) => prev.map((candidate) =>
       candidate.id === id ? { ...candidate, quantity: Math.max(minimum, Math.min(maximum, quantity)) } : candidate
     ));
-  }, [items, productsById]);
+  }, [hasCurrentStorage, visibleItems, productsById]);
 
   const removeItem = useCallback((id: string) => {
+    if (!hasCurrentStorage) return;
     setItems((prev) => prev.filter((i) => i.id !== id));
-  }, []);
+  }, [hasCurrentStorage]);
 
   const clearCart = useCallback(() => {
+    if (!hasCurrentStorage) return;
     setItems([]);
     setCouponCode(null);
-  }, []);
+  }, [hasCurrentStorage]);
 
   const saveForLater = useCallback((id: string) => {
+    if (!hasCurrentStorage) return;
     setItems((prev) => {
       const item = prev.find((i) => i.id === id);
       if (item) setSavedForLater((s) => (s.some((x) => x.id === id) ? s : [...s, item]));
       return prev.filter((i) => i.id !== id);
     });
-  }, []);
+  }, [hasCurrentStorage]);
 
   const moveToCart = useCallback((id: string) => {
-    const item = savedForLater.find((candidate) => candidate.id === id);
+    if (!hasCurrentStorage) return;
+    const item = visibleSavedForLater.find((candidate) => candidate.id === id);
     const product = item ? productsById[item.productId] : undefined;
-    const variant = item && product?.variants.find((candidate) => candidate.id === item.variantId);
+    const variant = item && (
+      product?.variants.find((candidate) => candidate.id === item.variantId) ??
+      (item.variantId === `prestashop-${item.productId}` && product?.variants.length === 1
+        ? product.variants[0]
+        : undefined)
+    );
     if (!item || !product || !variant?.inStock || !product.prestaShop?.availableForOrder) return;
 
     const minimum = product.prestaShop.minimumQuantity;
     const quantity = Math.max(minimum, item.quantity);
-    const existing = items.find((candidate) => candidate.id === id);
+    const existing = visibleItems.find((candidate) => candidate.id === id);
     const nextQuantity = quantity + (existing?.quantity ?? 0);
     if (nextQuantity > product.prestaShop.quantity) return;
 
@@ -226,11 +367,12 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       : [...current, { ...item, quantity }]
     );
     setSavedForLater((current) => current.filter((candidate) => candidate.id !== id));
-  }, [items, productsById, savedForLater]);
+  }, [hasCurrentStorage, visibleItems, productsById, visibleSavedForLater]);
 
   const removeSaved = useCallback((id: string) => {
+    if (!hasCurrentStorage) return;
     setSavedForLater((prev) => prev.filter((i) => i.id !== id));
-  }, []);
+  }, [hasCurrentStorage]);
 
   const applyCoupon = useCallback(
     (code: string): AddResult => {
@@ -255,8 +397,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
   const value = useMemo<CartContextValue>(
     () => ({
-      items,
-      savedForLater,
+      items: visibleItems,
+      savedForLater: visibleSavedForLater,
       lines,
       savedLines,
       totals,
@@ -277,8 +419,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       removeCoupon,
     }),
     [
-      items,
-      savedForLater,
+      visibleItems,
+      visibleSavedForLater,
       lines,
       savedLines,
       totals,

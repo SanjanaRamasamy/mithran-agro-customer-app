@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Clock, Loader2, Search, TrendingUp, X, XCircle } from "lucide-react";
+import { Clock, Loader2, Search, Sprout, TrendingUp, X, XCircle } from "lucide-react";
 import { useDebounce } from "@/hooks/useDebounce";
 import { useActivity } from "@/contexts/ActivityContext";
 import { useToast } from "@/contexts/NotificationContext";
@@ -17,7 +17,7 @@ import { cn } from "@/lib/utils";
 /** Instant search field with suggestions, recents, and keyboard navigation. */
 export function SearchBar({ className, autoFocusOnMount = false }: { className?: string; autoFocusOnMount?: boolean }) {
   const router = useRouter();
-  const { products, categories, status } = useCatalog();
+  const { products, categories, farms, status } = useCatalog();
   const { recentSearches, trackSearch, removeSearch, clearSearchHistory } = useActivity();
   const { toast } = useToast();
   const [query, setQuery] = useState("");
@@ -52,10 +52,21 @@ export function SearchBar({ className, autoFocusOnMount = false }: { className?:
     ).slice(0, 3);
   }, [debounced, categories]);
 
+  const farmHits = useMemo(() => {
+    const q = debounced.trim().toLowerCase();
+    if (!q) return [];
+    return farms.filter(
+      (farm) =>
+        farm.name.toLowerCase().includes(q) ||
+        farm.location.toLowerCase().includes(q) ||
+        farm.ownerName.toLowerCase().includes(q)
+    ).slice(0, 3);
+  }, [debounced, farms]);
+
   const popularProducts = products.slice(0, 5);
   const loading = status === "loading";
 
-  const totalSuggestions = productHits.length + categoryHits.length;
+  const totalSuggestions = productHits.length + categoryHits.length + farmHits.length;
 
   const go = useCallback(
     (term: string) => {
@@ -98,11 +109,17 @@ export function SearchBar({ className, autoFocusOnMount = false }: { className?:
         } else {
           const catIdx = activeIndex - productHits.length;
           if (catIdx < categoryHits.length) {
-            router.push(`/search?category=${categoryHits[catIdx].slug}`);
+            router.push(`/categories/${categoryHits[catIdx].slug}`);
             setOpen(false);
           } else {
-            const recentIdx = catIdx - categoryHits.length;
-            go(recentSearches[recentIdx]);
+            const farmIdx = catIdx - categoryHits.length;
+            if (farmIdx < farmHits.length) {
+              router.push(`/farms/${farmHits[farmIdx].slug}`);
+              setOpen(false);
+            } else {
+              const recentIdx = farmIdx - farmHits.length;
+              go(recentSearches[recentIdx]);
+            }
           }
         }
       } else {
@@ -253,6 +270,41 @@ export function SearchBar({ className, autoFocusOnMount = false }: { className?:
               </section>
             )}
 
+            {/* Farm hits */}
+            {farmHits.length > 0 && (
+              <section aria-label="Matching farms" className="border-t border-forest-50 pt-1">
+                <p className="px-3 pb-1 pt-2 text-[10px] font-bold uppercase tracking-widest text-graymute">Farms</p>
+                {farmHits.map((f, i) => {
+                  const idx = productHits.length + categoryHits.length + farmHits.length + i;
+                  return (
+                    <button
+                      key={f.id}
+                      role="option"
+                      aria-selected={activeIndex === idx}
+                      className={cn(
+                        "flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left transition",
+                        activeIndex === idx ? "bg-forest-50" : "hover:bg-soft"
+                      )}
+                      onClick={() => {
+                        setOpen(false);
+                        router.push(`/farms/${f.slug}`);
+                      }}
+                    >
+                      <span className="flex size-9 items-center justify-center rounded-lg bg-forest-50 text-forest-800" aria-hidden>
+                        <Sprout className="size-4" />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-semibold text-charcoal">{f.name}</span>
+                        <span className="block truncate text-xs text-graymute">
+                          {f.location || `${f.productIds.length} products`}
+                        </span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </section>
+            )}
+
             {/* Recent searches */}
             {recentSearches.length > 0 && (
               <section aria-label="Recent searches" className="border-t border-forest-50 pt-1">
@@ -266,7 +318,7 @@ export function SearchBar({ className, autoFocusOnMount = false }: { className?:
                   </button>
                 </div>
                 {recentSearches.map((s, i) => {
-                  const idx = productHits.length + categoryHits.length + i;
+                  const idx = productHits.length + categoryHits.length + farmHits.length + i;
                   return (
                     <div
                       key={s}

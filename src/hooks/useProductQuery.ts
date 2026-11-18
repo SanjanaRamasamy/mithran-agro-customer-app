@@ -54,7 +54,9 @@ export function sortProducts(products: Product[], sort: SortOption): Product[] {
       return arr.sort((a, b) => getMaxDiscount(b) - getMaxDiscount(a));
     case "newest":
       return arr.sort(
-        (a, b) => new Date(b.harvestDate).getTime() - new Date(a.harvestDate).getTime()
+        (a, b) =>
+          new Date(b.harvestDate || b.createdAt).getTime() -
+          new Date(a.harvestDate || a.createdAt).getTime()
       );
     case "relevance":
     default:

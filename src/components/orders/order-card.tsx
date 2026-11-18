@@ -7,7 +7,6 @@ import type { Order } from "@/types";
 import { ORDER_STATUS_CONFIG } from "@/constants";
 import { SmartImage } from "@/components/ui/smart-image";
 import { formatDateTime, formatPrice } from "@/utils/format";
-import { useOrders } from "@/contexts/OrdersContext";
 import { useCart } from "@/contexts/CartContext";
 import { useCatalog } from "@/contexts/CatalogContext";
 import { useToast } from "@/contexts/NotificationContext";
@@ -15,26 +14,41 @@ import { cn } from "@/lib/utils";
 
 export function OrderCard({ order }: { order: Order }) {
   const statusCfg = ORDER_STATUS_CONFIG[order.status];
-  const { reorder } = useOrders();
   const cart = useCart();
   const { products } = useCatalog();
   const { toast } = useToast();
   const preview = order.items.slice(0, 4);
 
   const handleReorder = () => {
-    const res = reorder(order.id);
+    const unavailable: string[] = [];
     let added = 0;
     for (const item of order.items) {
-      if (products.some((product) => product.id === item.productId)) {
-        cart.addItem(item.productId, item.variantId, item.quantity);
+      const product = products.find((entry) => entry.id === item.productId);
+      const variant = product?.variants[0];
+      if (!product || !variant) {
+        unavailable.push(item.name);
+        continue;
+      }
+      const result = cart.addItem(product.id, variant.id, item.quantity);
+      if (result.ok) {
         added += 1;
+      } else {
+        unavailable.push(item.name);
       }
     }
     if (added) {
       cart.openDrawer();
       toast({
-        title: res.message,
-        description: "Simulated reorder — basket restored from order items.",
+        title: `${added} item${added === 1 ? "" : "s"} added to your basket.`,
+        description: unavailable.length
+          ? `Unavailable or changed: ${unavailable.join(", ")}.`
+          : "Review current availability and prices before checkout.",
+      });
+    } else {
+      toast({
+        kind: "error",
+        title: "No order items could be added.",
+        description: unavailable.length ? `Unavailable or changed: ${unavailable.join(", ")}.` : undefined,
       });
     }
   };
@@ -47,7 +61,7 @@ export function OrderCard({ order }: { order: Order }) {
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <p className="text-sm font-extrabold text-charcoal">{order.id}</p>
+          <p className="text-sm font-extrabold text-charcoal">{order.reference ?? order.id}</p>
           <p className="mt-0.5 text-xs text-graymute">
             Placed {formatDateTime(order.placedAt)} · {order.items.length} {order.items.length === 1 ? "item" : "items"}
           </p>
@@ -83,7 +97,7 @@ export function OrderCard({ order }: { order: Order }) {
 
       <div className="mt-3.5 flex flex-wrap items-center gap-2 border-t border-forest-50 pt-3.5">
         <p className="mr-auto text-xs text-graymute">
-          Slot: <span className="font-semibold text-charcoal">{order.scheduledSlot}</span>
+          Delivery: <span className="font-semibold text-charcoal">{order.scheduledSlot}</span>
         </p>
         <button
           onClick={handleReorder}

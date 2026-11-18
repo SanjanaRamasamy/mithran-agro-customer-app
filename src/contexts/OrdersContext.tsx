@@ -1,127 +1,108 @@
 "use client";
 
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { Order } from "@/types";
-import { MOCK_ORDERS } from "@/data/orders";
-import { readStorage, writeStorage } from "@/utils/storage";
 import { useAuth } from "@/contexts/AuthContext";
-import { canPlaceOrderForCustomer, getCustomerOrders } from "@/utils/customer-access";
-
-const ORDERS_KEY = "verdant.orders.v1";
+import { parseCustomerOrder, parseCustomerOrders } from "@/lib/customer-order";
 
 interface OrdersContextValue {
   orders: Order[];
+  isLoading: boolean;
+  error: string | null;
   getOrder: (id: string) => Order | undefined;
   placeOrder: (order: Order) => void;
-  cancelOrder: (id: string) => void;
-  requestReturn: (id: string) => void;
-  reorder: (id: string) => { ok: boolean; message: string; outOfStock: string[] };
+}
+
+interface OrdersPayload {
+  success: boolean;
+  orders?: unknown;
+  order?: unknown;
+  message?: string;
 }
 
 const OrdersContext = createContext<OrdersContextValue | null>(null);
 
+function isOrdersPayload(value: unknown): value is OrdersPayload {
+  return typeof value === "object" && value !== null;
+}
+
 export function OrdersProvider({ children }: { children: React.ReactNode }) {
-  const { user, isAuthenticated } = useAuth();
-  const [orders, setOrders] = useState<Order[]>(MOCK_ORDERS);
-  const [hydrated, setHydrated] = useState(false);
-  const customerOrders = useMemo(
-    () => isAuthenticated && user ? getCustomerOrders(orders, user.id) : [],
-    [orders, user, isAuthenticated]
-  );
+  const { user, isAuthenticated, isLoading: authLoading } = useAuth();
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const requestVersion = useRef(0);
 
   useEffect(() => {
-    const stored = readStorage<Order[] | null>(ORDERS_KEY, null);
-    if (stored && stored.length) setOrders(stored);
-    setHydrated(true);
-  }, []);
+    if (authLoading) return;
+    const version = ++requestVersion.current;
+    if (!isAuthenticated || !user) {
+      setOrders([]);
+      setError(null);
+      setIsLoading(false);
+      return;
+    }
 
-  useEffect(() => {
-    if (hydrated) writeStorage(ORDERS_KEY, orders);
-  }, [orders, hydrated]);
+    const controller = new AbortController();
+    setIsLoading(true);
+    setError(null);
+    void fetch("/api/customer/orders", {
+      cache: "no-store",
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        let payload: unknown;
+        try {
+          payload = await response.json();
+        } catch {
+          throw new Error("Order service returned an invalid response.");
+        }
+        if (!response.ok || !isOrdersPayload(payload) || payload.success !== true) {
+          throw new Error(
+            isOrdersPayload(payload) && typeof payload.message === "string"
+              ? payload.message
+              : "Unable to load your PrestaShop orders.",
+          );
+        }
+        const parsed = parseCustomerOrders(payload.orders);
+        if (!parsed) throw new Error("Order service returned invalid order data.");
+        if (parsed.some((order) => order.userId !== user.id)) {
+          throw new Error("Order service returned data for a different customer.");
+        }
+        if (version !== requestVersion.current) return;
+        setOrders(parsed);
+      })
+      .catch((cause: unknown) => {
+        if (controller.signal.aborted || version !== requestVersion.current) return;
+        setOrders([]);
+        setError(cause instanceof Error ? cause.message : "Unable to load your orders.");
+      })
+      .finally(() => {
+        if (!controller.signal.aborted && version === requestVersion.current) setIsLoading(false);
+      });
+
+    return () => controller.abort();
+  }, [authLoading, isAuthenticated, user]);
 
   const getOrder = useCallback(
-    (id: string) => customerOrders.find((order) => order.id === id),
-    [customerOrders]
+    (id: string) => orders.find((order) => order.id === id),
+    [orders],
   );
 
-  const placeOrder = useCallback((order: Order) => {
-    if (!canPlaceOrderForCustomer(isAuthenticated, user?.id, order.userId)) return;
-    setOrders((prev) => [order, ...prev]);
-  }, [isAuthenticated, user]);
-
-  const cancelOrder = useCallback((id: string) => {
-    setOrders((prev) =>
-      prev.map((o) =>
-        o.id === id && o.userId === user?.id
-          ? {
-              ...o,
-              status: "cancelled",
-              canCancel: false,
-              canReturn: false,
-              tracking: [
-                ...o.tracking,
-                {
-                  id: `${o.id}-cancel`,
-                  status: "cancelled" as const,
-                  title: "Order cancelled",
-                  description: "Refund of the full amount initiated to the original payment method (simulated).",
-                  timestamp: new Date().toISOString(),
-                  completed: true,
-                },
-              ],
-            }
-          : o
-      )
-    );
-  }, [user]);
-
-  const requestReturn = useCallback((id: string) => {
-    setOrders((prev) =>
-      prev.map((o) =>
-        o.id === id && o.userId === user?.id
-          ? {
-              ...o,
-              status: "return-requested",
-              canReturn: false,
-              tracking: [
-                ...o.tracking,
-                {
-                  id: `${o.id}-return`,
-                  status: "return-requested" as const,
-                  title: "Return requested",
-                  description: "Instant refund to Mithren Agro Wallet once approved (simulated).",
-                  timestamp: new Date().toISOString(),
-                  completed: true,
-                },
-              ],
-            }
-          : o
-      )
-    );
-  }, [user]);
-
-  const reorder = useCallback(
-    (id: string) => {
-      const order = customerOrders.find((o) => o.id === id);
-      if (!order) return { ok: false, message: "Order not found", outOfStock: [] };
-      const outOfStock: string[] = [];
-      for (const item of order.items) {
-        // The caller adds items to cart; here we only detect availability issues.
-        const unavailable = item.quantity > 0 && item.price <= 0;
-        if (unavailable) outOfStock.push(item.name);
-      }
-      return {
-        ok: true,
-        message: `${order.items.length} item${order.items.length > 1 ? "s" : ""} added back to your basket`,
-        outOfStock,
-      };
-    },
-    [customerOrders]
-  );
+  const placeOrder = useCallback((value: Order) => {
+    const order = parseCustomerOrder(value);
+    if (!order || order.userId !== user?.id || !isAuthenticated) {
+      throw new Error("The confirmed order could not be verified for this account.");
+    }
+    requestVersion.current += 1;
+    setIsLoading(false);
+    setError(null);
+    setOrders((previous) => [order, ...previous.filter((item) => item.id !== order.id)]);
+  }, [isAuthenticated, requestVersion, user]);
 
   const value = useMemo(
-    () => ({ orders: customerOrders, getOrder, placeOrder, cancelOrder, requestReturn, reorder }),
-    [customerOrders, getOrder, placeOrder, cancelOrder, requestReturn, reorder]
+    () => ({ orders, isLoading, error, getOrder, placeOrder }),
+    [orders, isLoading, error, getOrder, placeOrder],
   );
 
   return <OrdersContext.Provider value={value}>{children}</OrdersContext.Provider>;

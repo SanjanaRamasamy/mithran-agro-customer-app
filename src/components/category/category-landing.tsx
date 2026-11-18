@@ -61,7 +61,8 @@ export function CategoryLanding({ slug }: CategoryLandingProps) {
 
   const scopeProducts = useMemo(
     () => products.filter((product) =>
-      product.prestaShop?.categoryIds.some((categoryId) => scopeIds.has(categoryId))
+      product.prestaShop?.categoryIds.some((categoryId) => scopeIds.has(categoryId)) ||
+      product.prestaShop?.categoryAncestorIds.some((categoryId) => scopeIds.has(categoryId))
     ),
     [products, scopeIds]
   );
@@ -114,6 +115,18 @@ export function CategoryLanding({ slug }: CategoryLandingProps) {
         <button onClick={reload} className="mt-4 inline-flex h-10 items-center rounded-xl bg-forest-900 px-4 text-sm font-bold text-white">
           Retry
         </button>
+      </div>
+    );
+  }
+
+  if (status === "ready" && !liveCategory && !cat && !group) {
+    return (
+      <div className="mx-auto max-w-3xl px-4 py-16 text-center">
+        <h1 className="text-xl font-bold text-charcoal">Category not found</h1>
+        <p className="mt-2 text-sm text-graymute">We could not find this category in the store catalogue.</p>
+        <Link href="/search" className="mt-4 inline-flex h-10 items-center rounded-xl bg-forest-900 px-4 text-sm font-bold text-white">
+          Browse all products
+        </Link>
       </div>
     );
   }

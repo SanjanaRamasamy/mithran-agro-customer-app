@@ -34,6 +34,8 @@ export default function HomePage() {
           eyebrow="Farm transparency"
           title="Featured farmers"
           subtitle="Meet the certified growers and collectives behind every basket"
+          viewAllHref="/farms"
+          viewAllLabel="View all farms"
         />
         <FarmerStories />
       </section>

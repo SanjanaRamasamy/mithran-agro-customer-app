@@ -1,20 +1,21 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { Leaf, Recycle, ShieldCheck, Truck } from "lucide-react";
 import { FOOTER_LINKS, SITE } from "@/config/site";
+import { useHydrated } from "@/hooks/useHydrated";
 
 const BADGES = [
   { icon: Leaf, label: "100% Organic" },
   { icon: Truck, label: "24h Delivery" },
   { icon: Recycle, label: "Zero-Waste Packs" },
-  { icon: ShieldCheck, label: "Secure Payments" },
+  { icon: ShieldCheck, label: "Secure Customer Accounts" },
 ];
 
 export function Footer() {
-  const [year] = useState(() => new Date().getFullYear());
+  const hydrated = useHydrated();
+  const year = hydrated ? new Date().getFullYear() : "";
 
   return (
     <footer className="mt-auto border-t border-forest-100/60 bg-white/70 backdrop-blur-md">
@@ -60,7 +61,7 @@ export function Footer() {
 
         <div className="mt-10 flex flex-col items-center justify-between gap-4 border-t border-forest-50 pt-6 sm:flex-row">
           <p className="text-xs text-graymute">
-            © {year} {SITE.fullName} — a frontend demo. All data is mocked locally; no real orders, payments, or accounts exist.
+            © {year} {SITE.fullName} — live catalog, customer accounts, and Cash on Delivery orders are handled by PrestaShop. Online card payments are not collected.
           </p>
           <p className="text-xs text-graymute">
             {SITE.city} · {SITE.supportEmail} · {SITE.supportPhone}

@@ -2,38 +2,23 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Bell, Headset, Heart, LogOut, Moon, Package, Settings, ShoppingBasket, Sparkles, Star, Sun, User } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCart } from "@/contexts/CartContext";
-import { useNotifications } from "@/contexts/NotificationContext";
+import { useNotifications, useToast } from "@/contexts/NotificationContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useAuthPrompt } from "@/contexts/AuthPromptContext";
-import { timeAgo } from "@/utils/format";
 import { cn } from "@/lib/utils";
+import { RelativeTime } from "@/components/ui/relative-time";
 
 /** Bell with unread badge + glass dropdown of notifications. */
 export function NotificationsBell() {
   const { notifications, unreadCount, markRead, markAllRead } = useNotifications();
   const { user } = useAuth();
   const router = useRouter();
-  const [now, setNow] = useState<number | null>(null);
 
   const latest = notifications.slice(0, 5);
-
-  useEffect(() => {
-    let interval: number | undefined;
-    const timeout = window.setTimeout(() => {
-      setNow(Date.now());
-      interval = window.setInterval(() => setNow(Date.now()), 60_000);
-    }, 0);
-
-    return () => {
-      window.clearTimeout(timeout);
-      if (interval !== undefined) window.clearInterval(interval);
-    };
-  }, []);
 
   return (
     <div className="relative">
@@ -77,16 +62,17 @@ export function NotificationsBell() {
                     {!n.read && <span className="mt-1 size-2 shrink-0 rounded-full bg-forest-500" aria-label="unread" />}
                   </span>
                   <span className="mt-0.5 line-clamp-2 block text-xs leading-relaxed text-graymute">{n.body}</span>
-                  <time dateTime={n.timestamp} className="mt-1 block text-[11px] text-graymute/80">
-                    {now === null ? "—" : timeAgo(n.timestamp, now)}
-                  </time>
+                  <RelativeTime
+                    timestamp={n.timestamp}
+                    className="mt-1 block text-[11px] text-graymute/80"
+                  />
                 </button>
               </li>
             ))}
           </ul>
           {!user && (
             <p className="px-3 pb-2 pt-1 text-[11px] text-graymute">
-              Sign in to sync notifications across devices (simulated).
+              Sign in to view notifications for your store account.
             </p>
           )}
         </div>
@@ -98,6 +84,7 @@ export function NotificationsBell() {
 /** Account menu — avatar when signed in, "Sign in" pill otherwise. */
 export function AccountMenu() {
   const { user, isAuthenticated, logout } = useAuth();
+  const { toast } = useToast();
   const router = useRouter();
 
   if (!isAuthenticated) {
@@ -155,14 +142,21 @@ export function AccountMenu() {
             ))}
             <li className="border-t border-forest-50 pt-1.5">
               <button
-                onClick={() => {
-                  logout();
-                  router.push("/");
+                onClick={async () => {
+                  try {
+                    await logout();
+                    router.push("/");
+                  } catch (error) {
+                    toast({
+                      kind: "error",
+                      title: error instanceof Error ? error.message : "Unable to confirm sign out.",
+                    });
+                  }
                 }}
                 className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-red-600 transition hover:bg-red-50"
               >
                 <LogOut className="size-4" aria-hidden />
-                Log out (simulated)
+                Log out
               </button>
             </li>
           </ul>

@@ -315,16 +315,25 @@ export async function POST(request: Request) {
       );
     }
 
-    const requestedItems = new Map<string, { productId: string; quantity: number; expectedPrice: number }>();
+    const requestedItems = new Map<string, {
+      productId: string;
+      attributeId: number;
+      quantity: number;
+      expectedPrice: number;
+    }>();
     for (const item of body.items) {
       if (!isRecord(item)) {
         return NextResponse.json({ success: false, message: "Invalid basket item." }, { status: 400 });
       }
       const productId = typeof item.productId === "string" ? item.productId : "";
+      const attributeId = numberValue(item.attributeId);
       const quantity = numberValue(item.quantity);
       const expectedPrice = numberValue(item.expectedPrice);
       if (
         !/^\d+$/.test(productId) ||
+        attributeId === undefined ||
+        !Number.isSafeInteger(attributeId) ||
+        attributeId < 0 ||
         !quantity ||
         quantity < 1 ||
         !Number.isSafeInteger(quantity) ||
@@ -333,7 +342,8 @@ export async function POST(request: Request) {
       ) {
         return NextResponse.json({ success: false, message: "Invalid basket item." }, { status: 400 });
       }
-      const existing = requestedItems.get(productId);
+      const itemKey = `${productId}:${attributeId}`;
+      const existing = requestedItems.get(itemKey);
       if (existing && Math.abs(existing.expectedPrice - expectedPrice) > 0.000001) {
         return NextResponse.json({ success: false, message: "Invalid basket item." }, { status: 400 });
       }
@@ -341,8 +351,9 @@ export async function POST(request: Request) {
       if (!Number.isSafeInteger(combinedQuantity)) {
         return NextResponse.json({ success: false, message: "Invalid basket quantity." }, { status: 400 });
       }
-      requestedItems.set(productId, {
+      requestedItems.set(itemKey, {
         productId,
+        attributeId,
         quantity: combinedQuantity,
         expectedPrice,
       });
@@ -374,6 +385,7 @@ export async function POST(request: Request) {
       }
 
       const stock = numberValue(product.quantity) ?? 0;
+      const defaultAttributeId = numberValue(product.cache_default_attribute) ?? 0;
       const minimum = Math.max(1, numberValue(product.minimal_quantity) ?? 1);
       const price = numberValue(product.price);
       if (
@@ -383,6 +395,12 @@ export async function POST(request: Request) {
       ) {
         return NextResponse.json(
           { success: false, message: "A basket product is no longer available to order." },
+          { status: 409 }
+        );
+      }
+      if (defaultAttributeId !== item.attributeId) {
+        return NextResponse.json(
+          { success: false, message: "A basket product selection is no longer available." },
           { status: 409 }
         );
       }

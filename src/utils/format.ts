@@ -26,12 +26,23 @@ export function formatDate(iso: string, style: "short" | "long" | "day" = "short
       day: "numeric",
       month: "long",
       year: "numeric",
+      timeZone: "Asia/Kolkata",
     });
   }
   if (style === "day") {
-    return d.toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" });
+    return d.toLocaleDateString("en-IN", {
+      weekday: "short",
+      day: "numeric",
+      month: "short",
+      timeZone: "Asia/Kolkata",
+    });
   }
-  return d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+  return d.toLocaleDateString("en-IN", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: "Asia/Kolkata",
+  });
 }
 
 export function formatDateTime(iso: string): string {
@@ -42,11 +53,14 @@ export function formatDateTime(iso: string): string {
     hour: "numeric",
     minute: "2-digit",
     hour12: true,
+    timeZone: "Asia/Kolkata",
   });
 }
 
 export function timeAgo(iso: string, now = Date.now()): string {
-  const diff = now - new Date(iso).getTime();
+  const timestamp = Date.parse(iso);
+  if (!Number.isFinite(timestamp) || !Number.isFinite(now)) return "—";
+  const diff = now - timestamp;
   const mins = Math.floor(diff / 60000);
   if (mins < 1) return "just now";
   if (mins < 60) return `${mins}m ago`;
@@ -56,6 +70,11 @@ export function timeAgo(iso: string, now = Date.now()): string {
   if (days < 30) return `${days}d ago`;
   const months = Math.floor(days / 30);
   return `${months}mo ago`;
+}
+
+export function notificationTimeLabel(iso: string | null | undefined, now: number | null): string {
+  if (now === null || !iso) return "—";
+  return timeAgo(iso, now);
 }
 
 export function packLabel(unit: string, value: number): string {

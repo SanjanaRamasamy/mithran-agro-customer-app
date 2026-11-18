@@ -4,8 +4,8 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useS
 import { AnimatePresence, motion } from "framer-motion";
 import { CheckCircle2, Info, TriangleAlert, X, XCircle } from "lucide-react";
 import type { AppNotification } from "@/types";
-import { MOCK_NOTIFICATIONS } from "@/data/offers";
-import { readStorage, writeStorage } from "@/utils/storage";
+import { useAuth } from "@/contexts/AuthContext";
+import { safeReturnPath } from "@/utils/safe-redirect";
 
 /* ================= Toasts (ephemeral, animated) ================= */
 
@@ -115,54 +115,112 @@ interface NotificationContextValue {
   markRead: (id: string) => void;
   markAllRead: () => void;
   remove: (id: string) => void;
-  push: (n: Omit<AppNotification, "id" | "timestamp" | "read">) => void;
 }
 
 const NotificationContext = createContext<NotificationContextValue | null>(null);
-const NTF_KEY = "verdant.notifications.v1";
+
+function parseNotifications(value: unknown): AppNotification[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((entry) => {
+    if (typeof entry !== "object" || entry === null) return [];
+    const record = entry as Record<string, unknown>;
+    if (
+      typeof record.id !== "string" ||
+      typeof record.title !== "string" ||
+      typeof record.body !== "string" ||
+      typeof record.timestamp !== "string" ||
+      !Number.isFinite(Date.parse(record.timestamp)) ||
+      typeof record.read !== "boolean"
+    ) return [];
+    const type = ["order", "offer", "delivery", "system", "price"].includes(String(record.type))
+      ? record.type as AppNotification["type"]
+      : "system";
+    return [{
+      id: record.id,
+      type,
+      title: record.title,
+      body: record.body,
+      timestamp: record.timestamp,
+      read: record.read,
+      ...(typeof record.actionLabel === "string" ? { actionLabel: record.actionLabel } : {}),
+      ...(typeof record.actionHref === "string"
+        ? { actionHref: safeReturnPath(record.actionHref) }
+        : {}),
+    }];
+  });
+}
 
 export function NotificationProvider({ children }: { children: React.ReactNode }) {
-  const [notifications, setNotifications] = useState<AppNotification[]>(MOCK_NOTIFICATIONS);
-  const [hydrated, setHydrated] = useState(false);
+  const { user, isLoading: authLoading } = useAuth();
+  const { toast } = useToast();
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
 
   useEffect(() => {
-    setNotifications(readStorage<AppNotification[]>(NTF_KEY, MOCK_NOTIFICATIONS));
-    setHydrated(true);
-  }, []);
+    if (authLoading) return;
+    let cancelled = false;
+    if (!user) {
+      setNotifications([]);
+      return () => { cancelled = true; };
+    }
+    void fetch("/api/customer/notifications", { cache: "no-store" })
+      .then(async (response) => {
+        const payload: unknown = await response.json();
+        if (
+          !response.ok ||
+          typeof payload !== "object" ||
+          payload === null ||
+          !("notifications" in payload)
+        ) throw new Error("Unable to load your account notifications.");
+        const next = parseNotifications(payload.notifications);
+        if (!cancelled) setNotifications(next);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setNotifications([]);
+          toast({ kind: "error", title: "Your account notifications could not be loaded." });
+        }
+      });
+    return () => { cancelled = true; };
+  }, [authLoading, user?.id, toast]);
 
-  useEffect(() => {
-    if (hydrated) writeStorage(NTF_KEY, notifications);
-  }, [notifications, hydrated]);
+  const updateRemote = useCallback(async (body: { id?: string; readAll?: boolean; remove?: boolean }) => {
+    try {
+      const response = await fetch("/api/customer/notifications", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        cache: "no-store",
+        body: JSON.stringify(body),
+      });
+      const payload: unknown = await response.json();
+      if (
+        !response.ok ||
+        typeof payload !== "object" ||
+        payload === null ||
+        !("notifications" in payload)
+      ) throw new Error("Unable to update your account notifications.");
+      setNotifications(parseNotifications(payload.notifications));
+    } catch {
+      toast({ kind: "error", title: "Your notification changes could not be saved." });
+    }
+  }, [toast]);
 
   const markRead = useCallback((id: string) => {
-    setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
-  }, []);
+    void updateRemote({ id });
+  }, [updateRemote]);
 
   const markAllRead = useCallback(() => {
-    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-  }, []);
+    void updateRemote({ readAll: true });
+  }, [updateRemote]);
 
   const remove = useCallback((id: string) => {
-    setNotifications((prev) => prev.filter((n) => n.id !== id));
-  }, []);
-
-  const push = useCallback((n: Omit<AppNotification, "id" | "timestamp" | "read">) => {
-    setNotifications((prev) => [
-      {
-        ...n,
-        id: `ntf-${Date.now()}`,
-        timestamp: new Date().toISOString(),
-        read: false,
-      },
-      ...prev,
-    ]);
-  }, []);
+    void updateRemote({ id, remove: true });
+  }, [updateRemote]);
 
   const unreadCount = useMemo(() => notifications.filter((n) => !n.read).length, [notifications]);
 
   const value = useMemo(
-    () => ({ notifications, unreadCount, markRead, markAllRead, remove, push }),
-    [notifications, unreadCount, markRead, markAllRead, remove, push]
+    () => ({ notifications, unreadCount, markRead, markAllRead, remove }),
+    [notifications, unreadCount, markRead, markAllRead, remove]
   );
 
   return <NotificationContext.Provider value={value}>{children}</NotificationContext.Provider>;
