@@ -200,7 +200,7 @@ function SupportContent() {
   return (
     <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
       <h1 className="text-2xl font-extrabold text-charcoal">Customer support</h1>
-      <p className="mt-1 text-sm text-graymute">Your requests are saved to your PrestaShop customer account.</p>
+      <p className="mt-1 text-sm text-graymute">Your requests are saved to your Mithran Agro customer account.</p>
       <form onSubmit={submit} noValidate className="mt-6 space-y-4 rounded-2xl border border-forest-100 bg-white p-5 shadow-soft">
         <div>
           <label htmlFor="support-subject" className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-graymute">Subject *</label>

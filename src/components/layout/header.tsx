@@ -16,7 +16,6 @@ import {
   AccountMenu,
   CartLink,
   NotificationsBell,
-  ThemeToggle,
   WishlistLink,
 } from "./header-widgets";
 
@@ -66,7 +65,6 @@ export function Header() {
             <NotificationsBell />
             <WishlistLink />
             <CartLink />
-            <ThemeToggle />
             <div className="ml-1 hidden sm:block">
               <AccountMenu />
             </div>

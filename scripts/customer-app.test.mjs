@@ -995,3 +995,35 @@ test("customer API routes enforce centralized validation helpers before calling 
   assert.match(loginPost, /validateEmail/);
   assert.match(resetPost, /validateEmail/);
 });
+
+test("customer experience improvements: order status, images, notifications, footer, and light-mode branding", () => {
+  const apiPhp = readFileSync(
+    new URL("../prestashop-module/mithranagroapp/classes/HeadlessCustomerApi.php", import.meta.url),
+    "utf8",
+  );
+  // 1. Order status must not confuse "Awaiting Cash on Delivery" with "delivered"
+  assert.match(apiPhp, /preg_match\('\/\\bdelivered\\b\/', \$name\)/);
+  assert.doesNotMatch(apiPhp, /strpos\(\$name, 'deliver'\) !== false/);
+  // 2. Order payload resolves real product cover images
+  assert.match(apiPhp, /Image::getCover\(/);
+  // 3. Login & order notifications use Mithran Agro branding without duplicates
+  assert.match(apiPhp, /'login-' \. date\('Y-m-d'\)/);
+  assert.match(apiPhp, /Your Mithran Agro order #/);
+  assert.match(apiPhp, /syncOrderStatusNotification/);
+
+  // 4. Footer has non-clickable Our Promise and Shri Procraft backlink
+  const footer = readFileSync(new URL("../src/components/layout/footer.tsx", import.meta.url), "utf8");
+  assert.match(footer, /https:\/\/shriprocraft\.com/);
+  assert.match(footer, /Powered by Shri Procraft/);
+  assert.match(footer, /isPromiseGroup/);
+
+  // 5. Women's Apparels is a direct nav link without dropdown and uses local banner image
+  const megaMenu = readFileSync(new URL("../src/components/layout/mega-menu.tsx", import.meta.url), "utf8");
+  assert.doesNotMatch(megaMenu, /ChevronDown/);
+  const imagesTs = readFileSync(new URL("../src/data/images.ts", import.meta.url), "utf8");
+  assert.match(imagesTs, /\/images\/women-apparels-banner\.jpg/);
+
+  // 6. Light-mode only: Header has no ThemeToggle
+  const header = readFileSync(new URL("../src/components/layout/header.tsx", import.meta.url), "utf8");
+  assert.doesNotMatch(header, /ThemeToggle/);
+});

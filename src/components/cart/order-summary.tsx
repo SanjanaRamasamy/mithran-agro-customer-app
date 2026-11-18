@@ -189,7 +189,7 @@ export function OrderSummary({
             </>
           )}
           <div className="flex justify-between border-t border-forest-50 pt-3 text-base">
-            <dt className="font-bold text-charcoal">{realCheckout ? "PrestaShop order total" : "Estimated total"}</dt>
+            <dt className="font-bold text-charcoal">{realCheckout ? "Order total" : "Estimated total"}</dt>
             <dd className="font-extrabold text-charcoal">
               {realCheckout
                 ? authoritativeTotal === undefined ? "Review total" : formatPrice(authoritativeTotal)
@@ -238,7 +238,7 @@ export function OrderSummary({
 
         <p className="mt-2.5 text-center text-[11px] leading-relaxed text-graymute">
           {realCheckout
-            ? "Inventory and final amount are verified by PrestaShop before order creation."
+            ? "Inventory and final amount are verified before order creation."
             : "Basket totals are estimates. Final price and availability are checked at checkout."}
         </p>
       </div>

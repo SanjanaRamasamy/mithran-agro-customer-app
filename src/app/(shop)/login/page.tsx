@@ -174,7 +174,7 @@ function LoginInner() {
             The basket that knows its farmer.
           </h2>
           <p className="mt-3 max-w-sm text-sm leading-relaxed text-forest-50/80">
-            Sign in to view your PrestaShop orders and manage saved delivery addresses.
+            Sign in to view your Mithran Agro orders and manage saved delivery addresses.
           </p>
           <ul className="mt-8 space-y-3">
             {["View orders associated with your store account", "Manage saved delivery addresses", "Place Cash on Delivery orders"].map((t) => (
@@ -209,7 +209,7 @@ function LoginInner() {
           <p className="mt-1.5 text-sm text-graymute">
             {mode === "login"
               ? "Sign in to continue your organic journey."
-              : "Create a PrestaShop customer account to place orders."}
+              : "Create a Mithran Agro customer account to place orders."}
           </p>
 
           <div className="mb-5 mt-6 flex items-center gap-3">

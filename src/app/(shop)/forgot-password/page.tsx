@@ -52,7 +52,7 @@ export default function ForgotPasswordPage() {
         throw new Error(detail);
       }
       setMessage(
-        "If an active account uses that email, PrestaShop will send its password reset link.",
+        "If an active account uses that email, we will send a password reset link.",
       );
     } catch (requestError) {
       setError(
@@ -70,8 +70,8 @@ export default function ForgotPasswordPage() {
       <section className="rounded-3xl border border-forest-100 bg-white p-6 shadow-soft sm:p-8">
         <h1 className="text-2xl font-extrabold text-charcoal">Reset your password</h1>
         <p className="mt-2 text-sm leading-relaxed text-graymute">
-          Enter your store-account email. PrestaShop will email its native password-reset link
-          if the account is active and eligible for a reset.
+          Enter your account email. We will email a password-reset link
+          if your account is active and eligible for a reset.
         </p>
         <form onSubmit={submit} noValidate className="mt-6 space-y-4">
           <div>

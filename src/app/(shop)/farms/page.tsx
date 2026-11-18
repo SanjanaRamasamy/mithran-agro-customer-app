@@ -48,8 +48,7 @@ export default function FarmsPage() {
             Farm directory is not published yet
           </h2>
           <p className="mx-auto mt-2 max-w-md text-sm text-graymute">
-            Partner farm profiles are managed in the PrestaShop Back Office under the Mithran Agro
-            module. Meanwhile, you can browse all live PrestaShop products directly.
+            Partner farm profiles are not published yet. Meanwhile, you can browse all available Mithran Agro products directly.
           </p>
           <div className="mt-5 flex flex-wrap justify-center gap-3">
             <Link

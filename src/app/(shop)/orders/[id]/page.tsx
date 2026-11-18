@@ -134,10 +134,12 @@ function OrderDetailInner({ orderId }: { orderId: string }) {
               Items ({order.items.length})
             </h2>
             <ul className="divide-y divide-forest-50">
-              {order.items.map((item) => (
+              {order.items.map((item) => {
+                const productImage = item.image || products.find((p) => p.id === item.productId)?.images[0] || "";
+                return (
                 <li key={item.id} className="flex items-center gap-3.5 py-3 first:pt-0 last:pb-0">
                   <SmartImage
-                    src={item.image}
+                    src={productImage}
                     alt={item.name}
                     emojiSeed={item.name}
                     rounded="rounded-xl"
@@ -162,7 +164,8 @@ function OrderDetailInner({ orderId }: { orderId: string }) {
                     )}
                   </div>
                 </li>
-              ))}
+                );
+              })}
             </ul>
 
             {/* payment summary */}

@@ -54,7 +54,7 @@ export const ORDER_STATUS_CONFIG: Record<
   { label: string; className: string; dotClassName: string }
 > = {
   placed: {
-    label: "Placed",
+    label: "Order Placed",
     className: "bg-blue-50 text-blue-700 border-blue-200",
     dotClassName: "bg-blue-500",
   },
@@ -64,7 +64,7 @@ export const ORDER_STATUS_CONFIG: Record<
     dotClassName: "bg-forest-500",
   },
   packed: {
-    label: "Packed",
+    label: "Processing",
     className: "bg-amber-50 text-amber-700 border-amber-200",
     dotClassName: "bg-amber-500",
   },

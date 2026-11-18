@@ -73,17 +73,20 @@ export function OrderCard({ order }: { order: Order }) {
       </div>
 
       <div className="mt-3.5 flex items-center gap-2">
-        {preview.map((item) => (
-          <SmartImage
-            key={item.id}
-            src={item.image}
-            alt={item.name}
-            emojiSeed={item.name}
-            rounded="rounded-xl"
-            className="size-12 shrink-0"
-            sizes="48px"
-          />
-        ))}
+        {preview.map((item) => {
+          const productImage = item.image || products.find((p) => p.id === item.productId)?.images[0] || "";
+          return (
+            <SmartImage
+              key={item.id}
+              src={productImage}
+              alt={item.name}
+              emojiSeed={item.name}
+              rounded="rounded-xl"
+              className="size-12 shrink-0"
+              sizes="48px"
+            />
+          );
+        })}
         {order.items.length > 4 && (
           <span className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-soft text-xs font-bold text-forest-800">
             +{order.items.length - 4}
