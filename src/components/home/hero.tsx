@@ -187,10 +187,10 @@ export function Hero() {
           transition={{ duration: 0.7, ease: easeOut, delay: 0.12 }}
           className="relative z-10"
         >
-          <div className="relative mx-auto aspect-[1344/768] w-full max-w-[620px] lg:max-w-none [mask-image:radial-gradient(74%_72%_at_50%_48%,#000_56%,transparent_79%)] [-webkit-mask-image:radial-gradient(74%_72%_at_50%_48%,#000_56%,transparent_79%)]">
+          <div className="relative mx-auto aspect-[1024/585] w-full max-w-[620px] lg:max-w-none [mask-image:radial-gradient(74%_72%_at_50%_48%,#000_56%,transparent_79%)] [-webkit-mask-image:radial-gradient(74%_72%_at_50%_48%,#000_56%,transparent_79%)]">
             <SmartImage
-              src="/images/hero-crate.png"
-              alt="Wooden crate branded Agro overflowing with fresh organic vegetables"
+              src="/images/hero-crate.jpg"
+              alt="Wooden crate branded Agro Pvt. Ltd. overflowing with fresh organic vegetables"
               emojiSeed="basket"
               rounded="rounded-none"
               className="absolute inset-0 h-full w-full"
