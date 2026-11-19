@@ -16,18 +16,18 @@ import {
 } from "lucide-react";
 
 export const SITE = {
-  name: "Mithren Agro",
-  fullName: "Mithren Agro Pvt. Ltd.",
+  name: "Agro",
+  fullName: "Agro",
   tagline: "Farm-fresh produce, organic fertilizers, organic groceries and women's apparel — from our farms to your home.",
   description:
-    "Mithren Agro Pvt. Ltd. is a farm-direct marketplace for fresh fruits, fresh vegetables, organic fertilizers, organic groceries and handwoven women's apparel — sourced from certified farmers and weaver clusters.",
-  supportEmail: "care@mithrenagro.example",
+    "Agro is a farm-direct marketplace for fresh fruits, fresh vegetables, organic fertilizers, organic groceries and handwoven women's apparel — sourced from certified farmers and weaver clusters.",
+  supportEmail: "care@agro.example",
   supportPhone: "+91 98450 12345",
   address: "No. 42, HSR Layout, Bengaluru, Karnataka 560102",
   city: "Bengaluru",
 } as const;
 
-/** Primary navigation — exactly the Mithren Agro business lines. */
+/** Primary navigation — Agro business lines. */
 export const NAV_LINKS: { label: string; href: string; icon?: LucideIcon }[] = [
   { label: "Home", href: "/", icon: Home },
   { label: "Fresh Fruits", href: "/category/fruits", icon: Apple },

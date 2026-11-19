@@ -152,7 +152,7 @@ export function CartDrawer() {
                     <ArrowRight className="size-4" aria-hidden />
                   </Link>
                   <p className="mt-2 text-center text-[11px] text-graymute">
-                    Live PrestaShop inventory and final total are verified at checkout.
+                    Live inventory and final total are verified at checkout.
                   </p>
                 </div>
               </>

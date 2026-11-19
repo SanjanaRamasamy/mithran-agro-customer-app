@@ -66,7 +66,7 @@ const RAW_SELLERS: Seller[] = [
   {
     id: "mithran-inputs",
     name: "K. Suresh",
-    farmName: "Mithren Agro Inputs",
+    farmName: "Agro Inputs",
     location: "Erode, Tamil Nadu",
     distanceKm: 210,
     rating: 4.7,

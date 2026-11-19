@@ -152,7 +152,7 @@ export const FAQS: FAQ[] = [
   {
     question: "What happens if produce arrives damaged?",
     answer:
-      "Raise a return request within 24 hours from your order page with a photo. We issue an instant refund to your Mithren Agro Wallet — no return pickup needed for produce.",
+      "Raise a return request within 24 hours from your order page with a photo. We issue an instant refund to your Agro Wallet — no return pickup needed for produce.",
   },
   {
     question: "Do you ship fertilizers and groceries outside Bengaluru?",

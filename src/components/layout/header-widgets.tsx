@@ -110,7 +110,7 @@ export function NotificationsBell() {
           )}
           {!user && (
             <p className="px-3 pb-2 pt-1 text-[11px] text-graymute">
-              Sign in to view notifications for your Mithran Agro account.
+              Sign in to view notifications for your Agro account.
             </p>
           )}
         </div>

@@ -129,8 +129,8 @@ class HeadlessCustomerApi
             (int) $customer->id,
             'login-' . date('Y-m-d'),
             'system',
-            'Welcome to Mithran Agro',
-            'Welcome to Mithran Agro! Your account is ready.',
+            'Welcome to Agro',
+            'Welcome to Agro! Your account is ready.',
             '/account'
         );
 
@@ -182,8 +182,8 @@ class HeadlessCustomerApi
             (int) $customer->id,
             'registration-' . (int) $customer->id,
             'system',
-            'Welcome to Mithran Agro',
-            'Welcome to Mithran Agro! Your account is ready.',
+            'Welcome to Agro',
+            'Welcome to Agro! Your account is ready.',
             '/account'
         );
         return $this->authenticationPayload($customer);
@@ -1014,7 +1014,7 @@ class HeadlessCustomerApi
                 'order-' . $orderId,
                 'order',
                 'Order placed',
-                'Your Mithran Agro order #' . (string) $order->reference . ' has been placed successfully.',
+                'Your Agro order ' . (string) $order->reference . ' has been placed.',
                 '/account/orders/' . $orderId
             );
             return [
@@ -1471,7 +1471,7 @@ class HeadlessCustomerApi
                 ),
                 'name' => (string) ($row['product_name'] ?? ''),
                 'image' => $imageUrl,
-                'sellerName' => 'Mithran Agro',
+                'sellerName' => 'Agro',
                 'packLabel' => (string) ($row['product_reference'] ?? 'Unit'),
                 'quantity' => $quantity,
                 'price' => round($unitPrice, 2),
@@ -1541,7 +1541,7 @@ class HeadlessCustomerApi
                 'order-' . $orderId . '-delivered',
                 'delivery',
                 'Order delivered',
-                'Your order #' . $reference . ' has been delivered successfully. Thank you for choosing Mithran Agro!',
+                'Your order ' . $reference . ' has been delivered successfully. Thank you for choosing Agro!',
                 '/orders/' . $orderId
             );
         }
@@ -1553,9 +1553,18 @@ class HeadlessCustomerApi
         if (strpos($name, 'cancel') !== false || strpos($name, 'refund') !== false) {
             return 'cancelled';
         }
-        // Check PrestaShop's authoritative delivery flag or exact word "delivered"
-        // (never match "delivery" inside "Awaiting Cash on Delivery").
-        if (!empty($state->delivery) || preg_match('/\bdelivered\b/', $name)) {
+        // "Awaiting Cash on Delivery" or pending states must never be treated as delivered,
+        // even if the PrestaShop OrderState delivery-slip flag is enabled.
+        if (
+            (strpos($name, 'await') !== false ||
+                strpos($name, 'pending') !== false ||
+                strpos($name, 'cash on delivery') !== false) &&
+            !preg_match('/\bdelivered\b/', $name)
+        ) {
+            return 'placed';
+        }
+        // Only map to delivered when the state name explicitly confirms delivery.
+        if (preg_match('/\bdelivered\b/', $name)) {
             return 'delivered';
         }
         if (

@@ -66,7 +66,7 @@ export const MOCK_PAYMENT_METHODS: SavedPaymentMethod[] = [
   {
     id: "pm-3",
     type: "wallet",
-    label: "Mithren Agro Wallet",
+    label: "Agro Wallet",
     masked: "Balance ₹1,250",
     isDefault: false,
   },
@@ -168,7 +168,7 @@ const RAW_ORDERS: Order[] = [
     tracking: trackingChain("o1", 3, [iso(6), iso(5), iso(3), iso(1), ""]),
     canCancel: false,
     canReturn: false,
-    deliveryPartner: "Mithren Express — Dhruv",
+    deliveryPartner: "Agro Express — Dhruv",
   },
   {
     id: "MAG-2026-010380",
@@ -237,7 +237,7 @@ const RAW_ORDERS: Order[] = [
     tracking: trackingChain("o2", 4, [iso(30), iso(28), iso(26), iso(24), iso(22)]),
     canCancel: false,
     canReturn: true,
-    deliveryPartner: "Mithren Express — Mahesh",
+    deliveryPartner: "Agro Express — Mahesh",
   },
   {
     id: "MAG-2026-010222",
@@ -306,7 +306,7 @@ const RAW_ORDERS: Order[] = [
     tracking: trackingChain("o3", 4, [iso(24 * 6), iso(24 * 6 - 2), iso(24 * 6 - 4), iso(24 * 6 - 5), iso(24 * 6 - 6)]),
     canCancel: false,
     canReturn: false,
-    deliveryPartner: "Mithren Express — Dhruv",
+    deliveryPartner: "Agro Express — Dhruv",
   },
   {
     id: "MAG-2026-010145",
@@ -430,7 +430,7 @@ const RAW_ORDERS: Order[] = [
     tracking: trackingChain("o5", 4, [iso(24 * 20), iso(24 * 20 - 2), iso(24 * 20 - 4), iso(24 * 20 - 6), iso(24 * 20 - 7)]),
     canCancel: false,
     canReturn: true,
-    deliveryPartner: "Mithren Express — Mahesh",
+    deliveryPartner: "Agro Express — Mahesh",
   },
 ];
 

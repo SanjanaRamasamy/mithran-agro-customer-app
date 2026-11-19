@@ -23,7 +23,7 @@ function ConfirmationInner() {
           {isLoading ? "Loading your order…" : error ? "Order confirmation unavailable" : "Order not found"}
         </h1>
         <p className="mt-1.5 text-sm text-graymute">
-          {error ?? "We could not find this order in your Mithran Agro customer account."}
+          {error ?? "We could not find this order in your Agro customer account."}
         </p>
         <Link
           href="/orders"
@@ -58,7 +58,7 @@ function ConfirmationInner() {
           Order placed
         </h1>
         <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-forest-50/90">
-          Your Mithran Agro order <strong>{order.reference ?? order.id}</strong> has been placed successfully! Cash on Delivery is due when the order arrives.
+          Your Agro order <strong>{order.reference ?? order.id}</strong> has been placed. Cash on Delivery is due when the order arrives.
         </p>
         <div className="mt-5 inline-flex flex-wrap items-center justify-center gap-x-6 gap-y-2 rounded-2xl bg-white/10 px-5 py-3 text-sm backdrop-blur-sm">
           <span className="flex items-center gap-2">

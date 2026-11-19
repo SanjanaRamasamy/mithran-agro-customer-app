@@ -64,7 +64,7 @@ export const MOCK_NOTIFICATIONS: AppNotification[] = [
     id: "ntf-6",
     type: "offer",
     title: "Wallet credited ₹50",
-    body: "You earned ₹50 Mithren Agro Wallet cashback from your last organic order.",
+    body: "You earned ₹50 Agro Wallet cashback from your last organic order.",
     timestamp: hoursAgo(46),
     read: true,
   },

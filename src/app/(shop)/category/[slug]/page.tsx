@@ -25,7 +25,7 @@ export async function generateMetadata({
   const name = cat?.name ?? group?.name ?? slug.replace(/-/g, " ");
   const description = cat?.description ?? group?.description;
   return {
-    title: `${name} — Shop the best of Mithren Agro`,
+    title: `${name} — Shop the best of Agro`,
     description,
   };
 }

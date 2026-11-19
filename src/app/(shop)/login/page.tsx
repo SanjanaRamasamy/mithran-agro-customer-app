@@ -1,11 +1,12 @@
 "use client";
 
 import { Suspense, useState } from "react";
-import Link from "next/link";
 import Image from "next/image";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
-import { Eye, EyeOff, Leaf, Lock, Mail, ShieldCheck } from "lucide-react";
+import { Eye, EyeOff, Lock, Mail, ShieldCheck } from "lucide-react";
+import { AgroBrandMark } from "@/components/ui/brand-mark";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/contexts/NotificationContext";
 import { cn } from "@/lib/utils";
@@ -149,76 +150,47 @@ function LoginInner() {
   };
 
   const inputCls =
-    "h-12 w-full rounded-xl border border-forest-100 bg-white pl-11 pr-4 text-sm text-charcoal outline-none transition placeholder:text-graymute/70 focus:border-forest-300 focus:ring-2 focus:ring-forest-200";
+    "h-12 w-full rounded-xl border border-forest-200/70 bg-white/85 pl-11 pr-4 text-sm text-charcoal shadow-2xs outline-none transition placeholder:text-graymute/70 focus:border-forest-500 focus:bg-white focus:ring-2 focus:ring-forest-500/20";
 
   return (
-    <div className="grid min-h-[calc(100vh-4rem)] lg:grid-cols-2">
-      {/* brand panel */}
-      <div className="relative hidden overflow-hidden bg-forest-900 lg:flex lg:flex-col lg:justify-between lg:p-12">
-        <div
-          className="pointer-events-none absolute -right-24 -top-24 size-96 rounded-full bg-lime-natural/15 blur-3xl"
-          aria-hidden
-        />
-        <div
-          className="pointer-events-none absolute -bottom-32 -left-16 size-96 rounded-full bg-emerald-500/10 blur-3xl"
-          aria-hidden
-        />
-        <Link href="/" className="relative inline-flex items-center gap-2 text-white">
-          <span className="flex size-10 items-center justify-center rounded-xl bg-white/10 ring-1 ring-white/20">
-            <Image src="/logo-mark.png" alt="" width={86} height={86} className="size-7" />
-          </span>
-          <span className="text-xl font-extrabold tracking-tight">Mithren Agro</span>
-        </Link>
-        <div className="relative">
-          <h2 className="text-3xl font-extrabold leading-tight tracking-tight text-white">
-            The basket that knows its farmer.
-          </h2>
-          <p className="mt-3 max-w-sm text-sm leading-relaxed text-forest-50/80">
-            Sign in to view your Mithran Agro orders and manage saved delivery addresses.
-          </p>
-          <ul className="mt-8 space-y-3">
-            {["View orders associated with your store account", "Manage saved delivery addresses", "Place Cash on Delivery orders"].map((t) => (
-              <li key={t} className="flex items-center gap-2.5 text-sm text-forest-50/90">
-                <ShieldCheck className="size-4 shrink-0 text-lime-natural" aria-hidden />
-                {t}
-              </li>
-            ))}
-          </ul>
-        </div>
-        <p className="relative text-xs text-forest-50/60">
-          Your account is securely verified by the Mithran Agro store.
-        </p>
-      </div>
+    <div className="relative flex min-h-[calc(100vh-4rem)] items-center justify-center overflow-hidden px-4 py-10 sm:px-6 sm:py-14">
+      {/* full-screen agricultural background */}
+      <Image
+        src="/images/login-farm-bg.jpg"
+        alt=""
+        fill
+        priority
+        sizes="100vw"
+        className="object-cover object-center"
+      />
+      <div
+        className="pointer-events-none absolute inset-0 bg-gradient-to-b from-forest-950/55 via-forest-950/45 to-forest-950/60"
+        aria-hidden
+      />
 
-      {/* form panel */}
-      <div className="flex items-center justify-center px-4 py-12 sm:px-8">
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.35 }}
-          className="w-full max-w-md"
-        >
-          <div className="mb-8 flex items-center gap-2 lg:hidden">
-            <Image src="/logo-mark.png" alt="" width={86} height={86} className="size-9" />
-            <span className="text-lg font-extrabold text-forest-950">Mithren Agro</span>
-          </div>
+      {/* centered glassmorphism login card */}
+      <motion.div
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.35, ease: "easeOut" }}
+        className="relative z-10 w-full max-w-md rounded-3xl border border-white/45 bg-white/80 p-6 shadow-glass backdrop-blur-xl sm:p-8"
+      >
+        <div className="flex flex-col items-center text-center">
+          <Link href="/" aria-label="Agro home" className="inline-flex">
+            <AgroBrandMark size="lg" />
+          </Link>
 
-          <h1 className="text-2xl font-extrabold tracking-tight text-charcoal">
-            {mode === "login" ? "Welcome back" : "Create your account"}
+          <h1 className="mt-5 text-2xl font-extrabold tracking-tight text-forest-950">
+            {mode === "login" ? "Welcome Back" : "Create your account"}
           </h1>
-          <p className="mt-1.5 text-sm text-graymute">
+          <p className="mt-1.5 text-sm text-charcoal/75">
             {mode === "login"
-              ? "Sign in to continue your organic journey."
-              : "Create a Mithran Agro customer account to place orders."}
+              ? "Sign in to continue your shopping journey."
+              : "Create an Agro customer account to place orders."}
           </p>
+        </div>
 
-          <div className="mb-5 mt-6 flex items-center gap-3">
-            <span className="h-px flex-1 bg-forest-100" aria-hidden />
-            <span className="text-xs font-medium text-graymute">Store account</span>
-            <span className="h-px flex-1 bg-forest-100" aria-hidden />
-          </div>
-
-          <form onSubmit={submit} className="space-y-4" noValidate>
+        <form onSubmit={submit} className="mt-6 space-y-4" noValidate>
             {mode === "signup" && (
               <div>
                 <label htmlFor="login-name" className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-graymute">Full name *</label>
@@ -368,16 +340,16 @@ function LoginInner() {
           </form>
 
           {authError && (
-            <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-xs text-amber-900" role="status">
+            <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50/90 px-3.5 py-2.5 text-xs text-amber-900" role="status">
               {authError}
             </p>
           )}
-          <p className="mt-5 text-center text-xs leading-relaxed text-graymute">
-            Passwords are sent only to our secure server connection and are never saved in this browser.
+          <p className="mt-5 flex items-center justify-center gap-1.5 text-center text-xs leading-relaxed text-charcoal/70">
+            <ShieldCheck className="size-3.5 shrink-0 text-forest-700" aria-hidden />
+            <span>Passwords are sent only to our secure server connection and never saved in this browser.</span>
           </p>
         </motion.div>
       </div>
-    </div>
   );
 }
 

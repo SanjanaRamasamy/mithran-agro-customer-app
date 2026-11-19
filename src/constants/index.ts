@@ -106,7 +106,7 @@ export const TRACKING_FLOW: OrderStatus[] = [
 /* --------------------------- Payment ---------------------------- */
 
 export const PAYMENT_METHODS = [
-  { id: "cod", label: "Cash on Delivery", hint: "Pay when the order arrives; PrestaShop records collection." },
+  { id: "cod", label: "Cash on Delivery", hint: "Pay when the order arrives; collection is recorded on delivery." },
 ] as const;
 
 /* -------------------------- Sort options ------------------------ */

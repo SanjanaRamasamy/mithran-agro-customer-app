@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
 import { Menu, X, ChevronDown, Home, LayoutGrid, BadgePercent, Tractor, Phone } from "lucide-react";
+import { AgroBrandMark } from "@/components/ui/brand-mark";
 import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { SITE, ACCOUNT_LINKS } from "@/config/site";
@@ -43,14 +43,7 @@ export function Header() {
           </button>
 
           <Link href="/" className="flex shrink-0 items-center" aria-label={`${SITE.name} home`}>
-            <Image
-              src="/logo.png"
-              alt={`${SITE.name} — Agro Pvt. Ltd.`}
-              width={1402}
-              height={655}
-              priority
-              className="h-10 w-auto sm:h-11"
-            />
+            <AgroBrandMark />
           </Link>
 
           <div className="hidden md:block">
@@ -102,10 +95,7 @@ export function Header() {
               aria-label="Mobile navigation"
             >
               <div className="flex items-center justify-between pb-3">
-                <span className="flex items-center gap-2 text-lg font-extrabold text-forest-950">
-                  <Image src="/logo-mark.png" alt="" width={86} height={86} className="size-9 rounded-lg" />
-                  {SITE.name}
-                </span>
+                <AgroBrandMark />
                 <button
                   onClick={() => setMobileMenuOpen(false)}
                   aria-label="Close menu"

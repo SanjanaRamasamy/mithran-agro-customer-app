@@ -60,7 +60,7 @@ const AVATARS = [1, 2, 3, 4] as const;
 export function Hero() {
   return (
     <section
-      aria-label="Mithren Agro — good food grows a better tomorrow"
+      aria-label="Agro — good food grows a better tomorrow"
       className="relative isolate w-full overflow-hidden"
     >
       {/* ---- background canvas ---- */}
@@ -157,7 +157,7 @@ export function Hero() {
                 <SmartImage
                   key={n}
                   src={`/images/avatar-${n}.png`}
-                  alt="Happy Mithren Agro customer"
+                  alt="Happy Agro customer"
                   emojiSeed="farmer"
                   rounded="rounded-full"
                   className="size-10 shrink-0 rounded-full ring-2 ring-white"
@@ -169,7 +169,7 @@ export function Hero() {
               <span className="font-extrabold">10,000+</span> happy families
             </p>
             <a
-              href="#why-mithren"
+              href="#why-agro"
               className="group inline-flex items-center gap-2.5 text-sm font-bold text-forest-950 transition hover:text-forest-700"
             >
               <span className="grid size-9 place-items-center rounded-full bg-forest-900 text-white shadow-soft transition duration-300 group-hover:scale-105">
@@ -190,7 +190,7 @@ export function Hero() {
           <div className="relative mx-auto aspect-[1344/768] w-full max-w-[620px] lg:max-w-none [mask-image:radial-gradient(74%_72%_at_50%_48%,#000_56%,transparent_79%)] [-webkit-mask-image:radial-gradient(74%_72%_at_50%_48%,#000_56%,transparent_79%)]">
             <SmartImage
               src="/images/hero-crate.png"
-              alt="Wooden crate branded Mithren Agro Pvt. Ltd. overflowing with fresh organic vegetables"
+              alt="Wooden crate branded Agro overflowing with fresh organic vegetables"
               emojiSeed="basket"
               rounded="rounded-none"
               className="absolute inset-0 h-full w-full"
