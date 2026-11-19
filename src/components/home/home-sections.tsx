@@ -6,14 +6,14 @@ import { TRUST_POINTS } from "@/constants";
 
 const TRUST_ICONS = [BadgeCheck, Truck, Leaf, ShieldCheck] as const;
 
-/** "Why choose Mithren Agro" — the four brand promises. */
+/** "Why choose Agro" — the four brand promises. */
 export function TrustSection() {
   return (
-    <section id="why-mithren" aria-label="Why choose Mithren Agro" className="scroll-mt-24 rounded-3xl bg-forest-900 p-6 text-white sm:p-10">
+    <section id="why-agro" aria-label="Why choose Agro" className="scroll-mt-24 rounded-3xl bg-forest-900 p-6 text-white sm:p-10">
       <div className="mb-8 max-w-lg">
-        <p className="text-xs font-bold uppercase tracking-widest text-lime-natural">The Mithren Agro promise</p>
+        <p className="text-xs font-bold uppercase tracking-widest text-lime-natural">The Agro promise</p>
         <h2 className="mt-1.5 text-2xl font-extrabold tracking-tight sm:text-3xl">
-          Why choose Mithren Agro.
+          Why choose Agro.
         </h2>
         <p className="mt-2 text-sm leading-relaxed text-white/70">
           One marketplace for your kitchen, your garden and your wardrobe — run on farm-direct

@@ -30,7 +30,7 @@ export default function FarmsPage() {
           Our farms &amp; grower collectives
         </h1>
         <p className="mt-3 text-sm leading-relaxed text-graymute sm:text-base">
-          Explore verified partner farms and collectives registered in Mithran Agro. Visit a farm
+          Explore verified partner farms and collectives registered in Agro. Visit a farm
           profile to learn its story and shop only the harvest grown and listed by that farm.
         </p>
       </header>
@@ -48,7 +48,7 @@ export default function FarmsPage() {
             Farm directory is not published yet
           </h2>
           <p className="mx-auto mt-2 max-w-md text-sm text-graymute">
-            Partner farm profiles are not published yet. Meanwhile, you can browse all available Mithran Agro products directly.
+            Partner farm profiles are not published yet. Meanwhile, you can browse all available Agro products directly.
           </p>
           <div className="mt-5 flex flex-wrap justify-center gap-3">
             <Link

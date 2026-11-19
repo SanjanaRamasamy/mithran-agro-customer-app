@@ -30,10 +30,10 @@ export function FarmerStories() {
           <Sprout className="mt-0.5 size-6 shrink-0 text-forest-700" aria-hidden />
           <div>
             <p className="text-sm font-bold text-charcoal">
-              Partner farm profiles are managed in PrestaShop
+              Partner farm profiles are not published yet
             </p>
             <p className="mt-0.5 text-xs text-graymute">
-              Visit Our Farms for directory status, or browse all active PrestaShop products.
+              Visit Our Farms for directory status, or browse all active Agro products.
             </p>
           </div>
         </div>

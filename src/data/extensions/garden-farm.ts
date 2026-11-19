@@ -393,7 +393,7 @@ export const GARDEN_FARM_EXTRA: Product[] = [
     storageLifeDays: 1825,
     deliveryEligible: false,
     unitsSold: 320, createdHoursAgo: 84,
-    brand: "Mithran Agro",
+    brand: "Agro",
     application: "Covers 1 acre with ~4,000 m of 16 mm inline lateral at 60 cm spacing; emitters 2.4 lph at 1.0 kg/cm².",
   }),
 
@@ -419,7 +419,7 @@ export const GARDEN_FARM_EXTRA: Product[] = [
     storageLifeDays: 1825,
     deliveryEligible: false,
     unitsSold: 540, createdHoursAgo: 108,
-    brand: "Mithran Agro",
+    brand: "Agro",
     application: "Lay laterals 60–90 cm apart for row crops; discharge 2–4 lph at 1.0 kg/cm² operating pressure.",
   }),
 
@@ -496,7 +496,7 @@ export const GARDEN_FARM_EXTRA: Product[] = [
     storage: "Charge battery every 45 days in storage; flush tank after chemicals.",
     storageLifeDays: 1095,
     unitsSold: 1100, createdHoursAgo: 72,
-    brand: "Mithran FieldPro",
+    brand: "Agro FieldPro",
     application: "16 L tank covers ~0.4 acre per fill at 2.5 bar; battery runs 4–5 hours of continuous spraying per charge.",
   }),
 
@@ -523,7 +523,7 @@ export const GARDEN_FARM_EXTRA: Product[] = [
     storageLifeDays: 1825,
     deliveryEligible: false,
     unitsSold: 210, createdHoursAgo: 240,
-    brand: "Mithran FieldPro",
+    brand: "Agro FieldPro",
     application: "Intercultivation in 45–60 cm row crops — covers 0.5–0.75 acre per hour with the rotary tiller attachment.",
   }),
 

@@ -2,7 +2,7 @@
 
 import { createContext, useCallback, useContext, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Leaf, LockKeyhole } from "lucide-react";
+import { Heart, LockKeyhole } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -52,31 +52,31 @@ export function AuthPromptProvider({ children }: { children: React.ReactNode }) 
     <AuthPromptContext.Provider value={value}>
       {children}
       <Dialog open={request !== null} onOpenChange={(open) => !open && setRequest(null)}>
-        <DialogContent className="overflow-hidden rounded-3xl border-forest-100 bg-white p-0 shadow-glass sm:max-w-md">
-          <div className="bg-gradient-to-br from-forest-900 to-forest-700 px-6 py-7 text-white">
-            <span className="flex size-11 items-center justify-center rounded-2xl bg-white/10 ring-1 ring-white/15">
+        <DialogContent className="overflow-hidden rounded-3xl border border-white/60 bg-white/85 p-6 shadow-lift backdrop-blur-2xl sm:max-w-sm sm:p-7">
+          <div className="flex flex-col items-center text-center">
+            <span className="flex size-14 items-center justify-center rounded-full border border-forest-200/70 bg-forest-50/90 text-forest-800 shadow-xs backdrop-blur-md">
               {request?.kind === "wishlist" ? (
-                <Leaf className="size-5 text-lime-natural" aria-hidden />
+                <Heart className="size-6 text-forest-700" aria-hidden />
               ) : (
-                <LockKeyhole className="size-5 text-lime-natural" aria-hidden />
+                <LockKeyhole className="size-6 text-forest-700" aria-hidden />
               )}
             </span>
-            <DialogHeader className="mt-4 text-left">
-              <DialogTitle className="text-xl font-extrabold text-white">
-                {request?.kind === "wishlist" ? "Sign in to save this item" : "Sign in to place your order"}
+            <DialogHeader className="mt-4 items-center text-center">
+              <DialogTitle className="text-xl font-extrabold tracking-tight text-forest-950">
+                {request?.kind === "wishlist" ? "Save your favourites" : "Sign in to place your order"}
               </DialogTitle>
-              <DialogDescription className="mt-2 leading-relaxed text-forest-50/85">
+              <DialogDescription className="mt-2 max-w-xs text-sm leading-relaxed text-charcoal/75">
                 {request?.kind === "wishlist"
-                  ? "Your wishlist is available after signing in. Continue shopping without changing it."
+                  ? "Sign in to keep your favourite products saved and access them whenever you return."
                   : "Signing in is required to place an order. You can continue browsing as a guest, and your basket will stay saved."}
               </DialogDescription>
             </DialogHeader>
           </div>
-          <DialogFooter className="flex-col gap-2 p-5 sm:flex-col">
+          <DialogFooter className="mt-6 flex-col gap-2.5 sm:flex-col">
             <Button
               type="button"
               onClick={signIn}
-              className="h-12 w-full rounded-xl bg-forest-900 font-bold text-white hover:bg-forest-800"
+              className="h-11 w-full rounded-xl bg-forest-900 font-bold text-white shadow-soft transition hover:bg-forest-800"
             >
               Sign In
             </Button>
@@ -84,7 +84,7 @@ export function AuthPromptProvider({ children }: { children: React.ReactNode }) 
               type="button"
               variant="outline"
               onClick={() => setRequest(null)}
-              className="h-12 w-full rounded-xl border-forest-200 font-semibold text-charcoal hover:bg-forest-50"
+              className="h-11 w-full rounded-xl border-forest-200/80 bg-white/70 font-semibold text-charcoal transition hover:bg-forest-50/80"
             >
               {request?.kind === "wishlist" ? "Continue Shopping" : "Continue as Guest"}
             </Button>

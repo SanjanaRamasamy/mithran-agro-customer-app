@@ -18,7 +18,7 @@ export const metadata: Metadata = {
   },
   description: SITE.description,
   keywords: [
-    "mithran agro", "organic", "fruits", "vegetables", "marketplace", "farm fresh",
+    "agro", "organic", "fruits", "vegetables", "marketplace", "farm fresh",
     "organic grocery", "fertilizers", "seeds", "plants", "garden tools", "farm equipment",
     "sarees", "fashion", "Bengaluru",
   ],
@@ -28,7 +28,6 @@ export const metadata: Metadata = {
     description: SITE.description,
     siteName: SITE.name,
     type: "website",
-    images: ["/logo.png"],
   },
 };
 

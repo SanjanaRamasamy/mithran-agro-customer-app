@@ -120,10 +120,10 @@ export function CartBySeller({ lines }: { lines: CartLine[] }) {
   return (
     <div className="space-y-5">
       {Object.entries(groups).map(([sellerId, groupLines]) => (
-        <section key={sellerId || "store"} aria-label={`Basket items from ${sellerId || "Mithran Agro"}`}>
+        <section key={sellerId || "store"} aria-label={`Basket items from ${sellerId || "Agro"}`}>
           <div className="mb-2.5 flex items-center justify-between">
             <p className="text-sm font-bold text-charcoal">
-              {sellerId ? sellerId : "Mithran Agro"}
+              {sellerId ? sellerId : "Agro"}
             </p>
             <span className="text-xs font-semibold text-forest-700">
               {groupLines.length} {groupLines.length === 1 ? "item" : "items"}

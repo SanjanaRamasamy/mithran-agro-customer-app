@@ -19,7 +19,7 @@ export default function HomePage() {
       <div className="mx-auto max-w-7xl space-y-12 px-4 py-6 sm:space-y-14 sm:px-6 sm:py-8">
       <section aria-label="Shop by category">
         <SectionHeading
-          eyebrow="Everything Mithren Agro grows, makes & sells"
+          eyebrow="Everything Agro grows, makes & sells"
           title="Shop by category"
           viewAllHref="/search"
           viewAllLabel="All products"

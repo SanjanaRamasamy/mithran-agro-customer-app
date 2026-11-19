@@ -354,7 +354,7 @@ export function CheckoutForm() {
       <div className="space-y-5">
         {/* Step 1 — account */}
         <section aria-label="Customer details" className="rounded-2xl border border-forest-50 bg-white p-5 shadow-soft">
-          <StepHeader n={1} title="Customer account" hint="Order details are associated with your Mithran Agro account." />
+          <StepHeader n={1} title="Customer account" hint="Order details are associated with your Agro account." />
           <p className="text-sm font-semibold text-charcoal">{user?.name}</p>
           <p className="mt-0.5 text-xs text-graymute">{user?.email}</p>
         </section>
@@ -570,7 +570,7 @@ export function CheckoutForm() {
         <section aria-label="Delivery" className="rounded-2xl border border-forest-50 bg-white p-5 shadow-soft">
           <StepHeader n={3} title="Delivery" hint="Delivery charges and timing are calculated for your delivery address." />
           <p className="text-sm leading-relaxed text-graymute">
-            Delivery timing and fees are calculated by the store carrier. The final amount shown below comes from PrestaShop.
+            Delivery timing and fees are calculated by the store carrier. The final amount shown below is verified by the store.
           </p>
         </section>
 
@@ -617,7 +617,7 @@ export function CheckoutForm() {
               role="status"
             >
               <span className="size-4 animate-spin rounded-full border-2 border-forest-700 border-t-transparent" aria-hidden />
-              Revalidating your basket and submitting it to PrestaShop…
+              Revalidating your basket and submitting your order…
             </motion.div>
           )}
         </div>

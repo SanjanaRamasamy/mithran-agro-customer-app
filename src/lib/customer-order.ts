@@ -13,6 +13,58 @@ const ORDER_STATUSES: OrderStatus[] = [
   "returned",
 ];
 
+/**
+ * Canonical order-status normalizer shared across order cards, history tabs,
+ * detail badges, and tracking timelines. Never infers "delivered" from
+ * "Awaiting Cash on Delivery" or payment-pending states.
+ */
+export function normalizeTrackingStatus(title: string, fallback: OrderStatus): OrderStatus {
+  const name = title.trim().toLowerCase();
+  if (!name) return fallback;
+  if (name.includes("cancel") || name.includes("refund")) {
+    return "cancelled";
+  }
+  if (name.includes("return") && name.includes("request")) {
+    return "return-requested";
+  }
+  if (/\breturned\b/.test(name)) {
+    return "returned";
+  }
+  if (
+    (name.includes("await") || name.includes("pending") || name.includes("cash on delivery")) &&
+    !/\bdelivered\b/.test(name)
+  ) {
+    return "placed";
+  }
+  if (/\bdelivered\b/.test(name)) {
+    return "delivered";
+  }
+  if (name.includes("ship") || name.includes("out for delivery")) {
+    return "out-for-delivery";
+  }
+  if (name.includes("pack") || name.includes("prepar") || name.includes("process")) {
+    return "packed";
+  }
+  if (name.includes("confirm") || name.includes("payment accepted")) {
+    return "confirmed";
+  }
+  return fallback;
+}
+
+export function normalizeOrderStatus(
+  rawStatus: OrderStatus,
+  tracking: TrackingEvent[],
+  paymentStatus: "paid" | "pending" = "pending",
+): OrderStatus {
+  if (tracking.length > 0) {
+    return tracking[tracking.length - 1].status;
+  }
+  if (rawStatus === "delivered" && paymentStatus === "pending") {
+    return "placed";
+  }
+  return rawStatus;
+}
+
 function isRecord(value: unknown): value is JsonRecord {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -64,13 +116,17 @@ function parseItem(value: unknown): OrderItem | null {
   if (!id || !productId || !variantId || !name || quantity === null || price === null || mrp === null || lineTotal === null) {
     return null;
   }
+  const rawSellerName = string(value.sellerName) ?? "";
+  const sellerName = /^(mithran\s*agro|mithren\s*agro)$/i.test(rawSellerName.trim())
+    ? "Agro"
+    : rawSellerName;
   return {
     id,
     productId,
     variantId,
     name,
     image: string(value.image) ?? "",
-    sellerName: string(value.sellerName) ?? "",
+    sellerName,
     packLabel: string(value.packLabel) ?? "Unit",
     quantity,
     price,
@@ -83,12 +139,15 @@ function parseTrackingEvent(value: unknown): TrackingEvent | null {
   if (!isRecord(value) || !ORDER_STATUSES.includes(value.status as OrderStatus)) return null;
   const id = string(value.id);
   const title = string(value.title);
-  const description = string(value.description);
+  const rawDescription = string(value.description);
   const timestamp = string(value.timestamp);
-  if (!id || !title || !description || timestamp === null || typeof value.completed !== "boolean") return null;
+  if (!id || !title || rawDescription === null || timestamp === null || typeof value.completed !== "boolean") return null;
+  const description = /prestashop/i.test(rawDescription)
+    ? "Order status updated."
+    : rawDescription;
   return {
     id,
-    status: value.status as OrderStatus,
+    status: normalizeTrackingStatus(title, value.status as OrderStatus),
     title,
     description,
     timestamp,
@@ -149,23 +208,27 @@ export function parseCustomerOrder(value: unknown): Order | null {
   const tracking = value.tracking.map(parseTrackingEvent);
   if (items.some((item) => item === null) || tracking.some((event) => event === null)) return null;
 
+  const normalizedTracking = tracking as TrackingEvent[];
+  const paymentStatus: "paid" | "pending" = value.paymentStatus === "paid" ? "paid" : "pending";
+  const canonicalStatus = normalizeOrderStatus(status as OrderStatus, normalizedTracking, paymentStatus);
+
   return {
     id,
     reference: string(value.reference) ?? undefined,
     userId,
     items: items as OrderItem[],
-    status: status as OrderStatus,
+    status: canonicalStatus,
     placedAt,
-    deliveredAt: string(value.deliveredAt) ?? undefined,
+    deliveredAt: canonicalStatus === "delivered" ? (string(value.deliveredAt) ?? undefined) : undefined,
     scheduledSlot,
     address,
     paymentMethod,
     paymentId,
-    paymentStatus: value.paymentStatus === "paid" ? "paid" : "pending",
+    paymentStatus,
     totals,
     couponCode: string(value.couponCode) ?? undefined,
     invoiceNo: string(value.invoiceNo) ?? "Not issued",
-    tracking: tracking as TrackingEvent[],
+    tracking: normalizedTracking,
     canCancel: value.canCancel,
     canReturn: value.canReturn,
     deliveryPartner: string(value.deliveryPartner) ?? undefined,

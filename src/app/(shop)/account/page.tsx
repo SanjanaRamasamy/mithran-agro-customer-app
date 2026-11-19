@@ -113,7 +113,7 @@ function ProfileForm({
   return (
     <form onSubmit={submit} noValidate aria-label="Edit profile" className="rounded-2xl border border-forest-50 bg-white p-5 shadow-soft sm:p-6">
       <h2 className="text-base font-bold text-charcoal">Personal information</h2>
-      <p className="mt-0.5 text-xs text-graymute">Your name and phone number are saved to your Mithran Agro customer profile.</p>
+      <p className="mt-0.5 text-xs text-graymute">Your name and phone number are saved to your Agro customer profile.</p>
       <div className="mt-4 grid gap-4 sm:grid-cols-2">
         <div>
           <label htmlFor="pf-name" className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-graymute">Full name *</label>
@@ -263,7 +263,7 @@ function AccountInner() {
       <EmptyState
         icon={User}
         title="Sign in to manage your account"
-        description="Sign in to manage your Mithran Agro customer profile and saved delivery addresses."
+        description="Sign in to manage your Agro customer profile and saved delivery addresses."
         action={{ label: "Sign in", href: "/login?redirect=%2Faccount" }}
         className="mt-8"
       />

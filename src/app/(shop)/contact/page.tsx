@@ -61,7 +61,7 @@ export default function ContactPage() {
           We reply within one working day
         </p>
         <h1 className="mt-1 text-3xl font-extrabold tracking-tight text-charcoal sm:text-4xl">
-          Contact Mithren Agro
+          Contact Agro
         </h1>
         <p className="mt-3 text-sm leading-relaxed text-graymute sm:text-base">
           Questions about an order, bulk fertilizer pricing, or selling your farm&apos;s harvest

@@ -1006,10 +1006,11 @@ test("customer experience improvements: order status, images, notifications, foo
   assert.doesNotMatch(apiPhp, /strpos\(\$name, 'deliver'\) !== false/);
   // 2. Order payload resolves real product cover images
   assert.match(apiPhp, /Image::getCover\(/);
-  // 3. Login & order notifications use Mithran Agro branding without duplicates
+  // 3. Login & order notifications use Agro branding without duplicates
   assert.match(apiPhp, /'login-' \. date\('Y-m-d'\)/);
-  assert.match(apiPhp, /Your Mithran Agro order #/);
+  assert.match(apiPhp, /Your Agro order .*has been placed\./);
   assert.match(apiPhp, /syncOrderStatusNotification/);
+  assert.doesNotMatch(apiPhp, /!empty\(\$state->delivery\)/);
 
   // 4. Footer has non-clickable Our Promise and Shri Procraft backlink
   const footer = readFileSync(new URL("../src/components/layout/footer.tsx", import.meta.url), "utf8");
@@ -1023,7 +1024,151 @@ test("customer experience improvements: order status, images, notifications, foo
   const imagesTs = readFileSync(new URL("../src/data/images.ts", import.meta.url), "utf8");
   assert.match(imagesTs, /\/images\/women-apparels-banner\.jpg/);
 
-  // 6. Light-mode only: Header has no ThemeToggle
+  // 6. Light-mode only: Header has no ThemeToggle and uses AgroBrandMark
   const header = readFileSync(new URL("../src/components/layout/header.tsx", import.meta.url), "utf8");
   assert.doesNotMatch(header, /ThemeToggle/);
+  assert.match(header, /AgroBrandMark/);
+});
+
+test("canonical order status normalization keeps badge, history grouping, and tracking timeline consistent", async () => {
+  const { parseCustomerOrder, normalizeTrackingStatus } = await import("../src/lib/customer-order.ts");
+
+  const baseOrder = {
+    id: "101",
+    reference: "BIALMMSLD",
+    userId: "12",
+    items: [
+      {
+        id: "1",
+        productId: "42",
+        variantId: "42-0",
+        name: "Kancheepuram silk saree",
+        image: "",
+        sellerName: "Mithran Agro",
+        packLabel: "Unit",
+        quantity: 2,
+        price: 5499,
+        mrp: 5499,
+        lineTotal: 10998,
+      },
+    ],
+    status: "delivered",
+    placedAt: "2026-11-19 05:13:00",
+    deliveredAt: "2026-11-19 05:13:00",
+    scheduledSlot: "Delivery via store carrier",
+    address: {
+      id: "5",
+      label: "Home",
+      name: "Test Customer",
+      phone: "9876543210",
+      line1: "12, 27th Main",
+      city: "Bengaluru",
+      state: "Karnataka",
+      pincode: "560102",
+      type: "home",
+      isDefault: true,
+    },
+    paymentMethod: "Cash on Delivery",
+    paymentId: "Not applicable for Cash on Delivery",
+    paymentStatus: "pending",
+    totals: {
+      subtotal: 10998,
+      mrpTotal: 10998,
+      savings: 0,
+      deliveryFee: 0,
+      handlingFee: 0,
+      greenFee: 0,
+      discount: 0,
+      tax: 0,
+      total: 10998,
+    },
+    invoiceNo: "Not issued",
+    tracking: [
+      {
+        id: "1",
+        status: "delivered",
+        title: "Awaiting Cash on Delivery",
+        description: "Status recorded by PrestaShop.",
+        timestamp: "2026-11-19 05:13:00",
+        completed: true,
+      },
+    ],
+    canCancel: false,
+    canReturn: false,
+  };
+
+  // Newly placed COD order ("Awaiting Cash on Delivery") must normalize to "placed"
+  const codOrder = parseCustomerOrder(baseOrder);
+  assert.ok(codOrder);
+  assert.equal(codOrder.status, "placed");
+  assert.equal(codOrder.deliveredAt, undefined);
+  assert.equal(codOrder.tracking[0].status, "placed");
+  assert.equal(codOrder.tracking[0].description, "Order status updated.");
+  assert.equal(codOrder.items[0].sellerName, "Agro");
+
+  // All lifecycle states normalize consistently across badge & timeline
+  const cases = [
+    ["Awaiting Cash on Delivery", "placed"],
+    ["Payment accepted", "confirmed"],
+    ["Order confirmed", "confirmed"],
+    ["Preparation in progress", "packed"],
+    ["Packed", "packed"],
+    ["Shipped", "out-for-delivery"],
+    ["Out for delivery", "out-for-delivery"],
+    ["Delivered", "delivered"],
+    ["Cancelled", "cancelled"],
+  ];
+  for (const [title, expected] of cases) {
+    assert.equal(normalizeTrackingStatus(title, "placed"), expected);
+    const parsed = parseCustomerOrder({
+      ...baseOrder,
+      status: expected,
+      paymentStatus: expected === "delivered" ? "paid" : "pending",
+      tracking: [
+        {
+          id: "2",
+          status: expected,
+          title,
+          description: "Order status updated.",
+          timestamp: "2026-11-19 06:00:00",
+          completed: true,
+        },
+      ],
+    });
+    assert.ok(parsed);
+    assert.equal(parsed.status, expected);
+    assert.equal(parsed.tracking[0].status, expected);
+  }
+
+  // Order history grouping: active vs delivered vs cancelled
+  const activeStatuses = ["placed", "confirmed", "packed", "out-for-delivery"];
+  assert.equal(activeStatuses.includes(codOrder.status), true);
+  assert.equal(codOrder.status === "delivered", false);
+});
+
+test("customer-facing pages use Agro branding and glassmorphic login & wishlist modal", () => {
+  const customerFiles = [
+    "../src/config/site.ts",
+    "../src/app/(shop)/login/page.tsx",
+    "../src/contexts/AuthPromptContext.tsx",
+    "../src/components/layout/header.tsx",
+    "../src/components/layout/footer.tsx",
+    "../src/components/checkout/checkout-form.tsx",
+    "../src/app/(shop)/order-confirmation/page.tsx",
+    "../src/app/(shop)/orders/page.tsx",
+  ];
+  for (const rel of customerFiles) {
+    const raw = readFileSync(new URL(rel, import.meta.url), "utf8");
+    const stripped = raw
+      .replace(/\.prestaShop\b/g, "")
+      .replace(/\/api\/prestashop\/[a-z0-9/_-]*/gi, "");
+    assert.doesNotMatch(stripped, /mithran|mithren|prestashop/i, `${rel} should not contain old branding`);
+  }
+  const loginSrc = readFileSync(new URL("../src/app/(shop)/login/page.tsx", import.meta.url), "utf8");
+  assert.match(loginSrc, /login-farm-bg\.jpg/);
+  assert.match(loginSrc, /backdrop-blur/);
+  assert.match(loginSrc, /Welcome Back/);
+  const modalSrc = readFileSync(new URL("../src/contexts/AuthPromptContext.tsx", import.meta.url), "utf8");
+  assert.match(modalSrc, /Save your favourites/);
+  assert.match(modalSrc, /backdrop-blur/);
 });
